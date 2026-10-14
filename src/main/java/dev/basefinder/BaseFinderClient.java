@@ -181,7 +181,9 @@ public final class BaseFinderClient implements ClientModInitializer {
     }
 
     private static boolean isBaseClue(Block block) {
-        if (!blockFilters.getOrDefault(block, true)) return false;
+        // Only explicitly supported filter blocks are clues. Unknown blocks (including air,
+        // grass, dirt, stone, and other terrain) must never be added to the results.
+        if (!blockFilters.containsKey(block) || !blockFilters.get(block)) return false;
         boolean geode = block == Blocks.BUDDING_AMETHYST || block == Blocks.AMETHYST_BLOCK
                 || block == Blocks.AMETHYST_CLUSTER || block == Blocks.LARGE_AMETHYST_BUD
                 || block == Blocks.MEDIUM_AMETHYST_BUD || block == Blocks.SMALL_AMETHYST_BUD;
@@ -193,10 +195,19 @@ public final class BaseFinderClient implements ClientModInitializer {
         for (FoundBlock item : found) {
             BlockPos p = item.pos();
             double x = p.getX() + 0.5, y = p.getY() + 0.5, z = p.getZ() + 0.5;
-            client.world.addParticleClient(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
-            client.world.addParticleClient(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
-            client.world.addParticleClient(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
-            client.world.addParticleClient(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
+            // Bright END_ROD markers at corners and midpoints make detections easier to spot.
+            double[][] markers = {
+                    {-0.42, 0.95, -0.42}, {0.42, 0.95, -0.42},
+                    {-0.42, 0.95, 0.42}, {0.42, 0.95, 0.42},
+                    {-0.42, 0.10, -0.42}, {0.42, 0.10, -0.42},
+                    {-0.42, 0.10, 0.42}, {0.42, 0.10, 0.42},
+                    {-0.42, 0.55, -0.42}, {0.42, 0.55, -0.42},
+                    {-0.42, 0.55, 0.42}, {0.42, 0.55, 0.42}
+            };
+            for (double[] marker : markers) {
+                client.world.addParticleClient(ParticleTypes.END_ROD,
+                        x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
+            }
         }
     }
 
