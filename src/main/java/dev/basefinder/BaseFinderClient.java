@@ -12,7 +12,6 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.render.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.util.math.Box;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -107,8 +106,11 @@ public final class BaseFinderClient implements ClientModInitializer {
             matrices.translate(-camera.x, -camera.y, -camera.z);
             VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
             for (FoundBlock item : found) {
-                Box box = new Box(item.pos()).expand(0.002);
-                VertexRendering.drawBox(matrices, lines, box, 0.2f, 1.0f, 0.9f, 1.0f);
+                BlockPos pos = item.pos();
+                var state = client.world.getBlockState(pos);
+                var shape = state.getOutlineShape(client.world, pos);
+                VertexRendering.drawOutline(matrices, lines, shape,
+                        pos.getX(), pos.getY(), pos.getZ(), 0xFF33FFDD, 2.0f);
             }
             matrices.pop();
         });
