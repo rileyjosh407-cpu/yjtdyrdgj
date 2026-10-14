@@ -3,12 +3,7 @@ package dev.basefinder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormats;
-import com.mojang.blaze3d.vertex.VertexConsumer;
+
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -103,8 +98,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                 scan(client);
             }
         });
-        // Replace the old HUD panel with world-space outlines.
-        WorldRenderEvents.END_MAIN.register(context -> renderHighlightsThroughWalls());
+        // The HUD is removed; particle markers are rendered at detected blocks.
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
@@ -214,40 +208,6 @@ public final class BaseFinderClient implements ClientModInitializer {
                         x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
             }
         }
-    }
-
-    private static void renderHighlightsThroughWalls() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (!enabled || !highlightsEnabled || client.world == null || client.player == null || found.isEmpty()) return;
-        var camera = client.gameRenderer.getCamera().getPos();
-        RenderSystem.assertOnRenderThread();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShader(net.minecraft.client.render.GameRenderer::getPositionColorProgram);
-        var tesselator = Tesselator.getInstance();
-        var buffer = tesselator.begin(VertexFormat.Mode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
-        for (FoundBlock item : found) {
-            BlockPos p = item.pos();
-            double x0 = p.getX() - camera.x, y0 = p.getY() - camera.y, z0 = p.getZ() - camera.z;
-            double x1 = x0 + 1.0, y1 = y0 + 1.0, z1 = z0 + 1.0;
-            float r = 0.25f, g = 0.95f, b = 1.0f, a = 0.95f;
-            line(buffer,x0,y0,z0,x1,y0,z0,r,g,b,a); line(buffer,x0,y0,z1,x1,y0,z1,r,g,b,a);
-            line(buffer,x0,y1,z0,x1,y1,z0,r,g,b,a); line(buffer,x0,y1,z1,x1,y1,z1,r,g,b,a);
-            line(buffer,x0,y0,z0,x0,y0,z1,r,g,b,a); line(buffer,x1,y0,z0,x1,y0,z1,r,g,b,a);
-            line(buffer,x0,y1,z0,x0,y1,z1,r,g,b,a); line(buffer,x1,y1,z0,x1,y1,z1,r,g,b,a);
-            line(buffer,x0,y0,z0,x0,y1,z0,r,g,b,a); line(buffer,x1,y0,z0,x1,y1,z0,r,g,b,a);
-            line(buffer,x0,y0,z1,x0,y1,z1,r,g,b,a); line(buffer,x1,y0,z1,x1,y1,z1,r,g,b,a);
-        }
-        tesselator.draw(buffer);
-        RenderSystem.enableDepthTest();
-        RenderSystem.disableBlend();
-    }
-
-    private static void line(com.mojang.blaze3d.vertex.VertexConsumer buffer, double x1, double y1, double z1,
-                             double x2, double y2, double z2, float r, float g, float b, float a) {
-        buffer.addVertex((float)x1, (float)y1, (float)z1).setColor(r, g, b, a);
-        buffer.addVertex((float)x2, (float)y2, (float)z2).setColor(r, g, b, a);
     }
 
     private static final class FinderConfigScreen extends Screen {
