@@ -8,6 +8,11 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.render.VertexConsumer;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.minecraft.util.math.Box;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -18,7 +23,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.particle.ParticleTypes;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -39,7 +43,6 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
-    private static int highlightTick = 0;
     private static boolean highlightsEnabled = true;
     private static int radius = 24;
     private static int sensitivity = 3;
@@ -89,16 +92,26 @@ public final class BaseFinderClient implements ClientModInitializer {
                 notifyPlayer(client, "Base Finder radius: " + radius + " blocks");
                 if (enabled) tickCounter = 39;
             }
-            if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 5) {
-                highlightTick = 0;
-                highlightFoundBlocks(client);
-            }
             if (enabled && client.player != null && client.world != null && ++tickCounter >= 40) {
                 tickCounter = 0;
                 scan(client);
             }
         });
-        // The HUD is removed; particle markers are rendered at detected blocks.
+        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (!enabled || !highlightsEnabled || client.world == null || client.player == null || found.isEmpty()) return;
+            var matrices = context.matrices();
+            if (matrices == null) return;
+            Vec3d camera = client.player.getCameraPosVec(1.0F);
+            matrices.push();
+            matrices.translate(-camera.x, -camera.y, -camera.z);
+            VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
+            for (FoundBlock item : found) {
+                Box box = new Box(item.pos()).expand(0.002);
+                VertexRendering.drawBox(matrices, lines, box, 0.2f, 1.0f, 0.9f, 1.0f);
+            }
+            matrices.pop();
+        });
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
@@ -179,6 +192,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         scanStatus = results.size() + " clues found; showing nearest " + found.size();
     }
 
+
     private static boolean isBaseClue(Block block) {
         // Only explicitly supported filter blocks are clues. Unknown blocks (including air,
         // grass, dirt, stone, and other terrain) must never be added to the results.
@@ -187,27 +201,6 @@ public final class BaseFinderClient implements ClientModInitializer {
                 || block == Blocks.AMETHYST_CLUSTER || block == Blocks.LARGE_AMETHYST_BUD
                 || block == Blocks.MEDIUM_AMETHYST_BUD || block == Blocks.SMALL_AMETHYST_BUD;
         return !geode || chunkFinderEnabled;
-    }
-
-    private static void highlightFoundBlocks(MinecraftClient client) {
-        if (client.world == null) return;
-        for (FoundBlock item : found) {
-            BlockPos p = item.pos();
-            double x = p.getX() + 0.5, y = p.getY() + 0.5, z = p.getZ() + 0.5;
-            // Bright END_ROD markers at corners and midpoints make detections easier to spot.
-            double[][] markers = {
-                    {-0.42, 0.95, -0.42}, {0.42, 0.95, -0.42},
-                    {-0.42, 0.95, 0.42}, {0.42, 0.95, 0.42},
-                    {-0.42, 0.10, -0.42}, {0.42, 0.10, -0.42},
-                    {-0.42, 0.10, 0.42}, {0.42, 0.10, 0.42},
-                    {-0.42, 0.55, -0.42}, {0.42, 0.55, -0.42},
-                    {-0.42, 0.55, 0.42}, {0.42, 0.55, 0.42}
-            };
-            for (double[] marker : markers) {
-                client.world.addParticleClient(ParticleTypes.END_ROD,
-                        x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
-            }
-        }
     }
 
     private static final class FinderConfigScreen extends Screen {
