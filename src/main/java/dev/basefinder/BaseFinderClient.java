@@ -193,10 +193,10 @@ public final class BaseFinderClient implements ClientModInitializer {
         for (FoundBlock item : found) {
             BlockPos p = item.pos();
             double x = p.getX() + 0.5, y = p.getY() + 0.5, z = p.getZ() + 0.5;
-            client.world.addParticle(x - 0.35, y + 0.55, z - 0.35, 0, 0.015, ParticleTypes.END_ROD);
-            client.world.addParticle(x + 0.35, y + 0.55, z - 0.35, 0, 0.015, ParticleTypes.END_ROD);
-            client.world.addParticle(x - 0.35, y + 0.55, z + 0.35, 0, 0.015, ParticleTypes.END_ROD);
-            client.world.addParticle(x + 0.35, y + 0.55, z + 0.35, 0, 0.015, ParticleTypes.END_ROD);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
         }
     }
 
