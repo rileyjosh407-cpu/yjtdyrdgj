@@ -8,7 +8,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.render.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
@@ -104,7 +104,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             Vec3d camera = client.player.getCameraPosVec(1.0F);
             matrices.push();
             matrices.translate(-camera.x, -camera.y, -camera.z);
-            VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
+            VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
             for (FoundBlock item : found) {
                 BlockPos pos = item.pos();
                 var state = client.world.getBlockState(pos);
