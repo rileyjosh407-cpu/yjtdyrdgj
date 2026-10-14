@@ -3,13 +3,12 @@ package dev.basefinder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Box;
-import com.mojang.blaze3d.systems.RenderSystem;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
@@ -103,23 +102,19 @@ public final class BaseFinderClient implements ClientModInitializer {
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             MinecraftClient client = MinecraftClient.getInstance();
             if (!enabled || !highlightsEnabled || client.world == null || client.player == null || found.isEmpty()) return;
-            MatrixStack matrices = context.matrixStack();
+            MatrixStack matrices = context.matrices();
             if (matrices == null) return;
-            Vec3d camera = context.camera().getPos();
+            Vec3d camera = client.gameRenderer.getCamera().getPos();
             matrices.push();
             matrices.translate(-camera.x, -camera.y, -camera.z);
-            VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
-            boolean depthWasEnabled = RenderSystem.isEnabled(2929);
-            RenderSystem.disableDepthTest();
+            VertexConsumer lines = context.consumers().getBuffer(RenderLayer.LINES);
             try {
                 for (FoundBlock item : found) {
                     BlockPos pos = item.pos();
-                    VertexRendering.drawBox(matrices, lines, new Box(pos).expand(0.003),
+                    WorldRenderer.drawBox(matrices, lines, new Box(pos).expand(0.003),
                             0.15f, 1.0f, 0.35f, 1.0f);
                 }
             } finally {
-                if (depthWasEnabled) RenderSystem.enableDepthTest();
-                else RenderSystem.disableDepthTest();
                 matrices.pop();
             }
         });
