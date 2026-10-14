@@ -8,6 +8,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.SpawnReason;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.BaseFinderRenderLayers;
 import net.minecraft.client.render.VertexRendering;
@@ -39,7 +42,10 @@ import java.util.Properties;
 
 /** Client-side Base Finder for Minecraft 1.21.11 + Fabric. */
 public final class BaseFinderClient implements ClientModInitializer {
-    private static KeyBinding toggleKey, rescanKey, increaseRadiusKey, decreaseRadiusKey, configKey;
+    private static KeyBinding toggleKey, rescanKey, increaseRadiusKey, decreaseRadiusKey, configKey, freecamKey;
+    private static boolean freecamEnabled = false;
+    private static Entity freecamCamera;
+    private static double freecamSpeed = 0.35;
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
@@ -75,8 +81,11 @@ public final class BaseFinderClient implements ClientModInitializer {
         increaseRadiusKey = registerKey("key.basefinder.radius_increase", GLFW.GLFW_KEY_RIGHT_BRACKET);
         decreaseRadiusKey = registerKey("key.basefinder.radius_decrease", GLFW.GLFW_KEY_LEFT_BRACKET);
         configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_F8);
+        freecamKey = registerKey("key.basefinder.freecam", GLFW.GLFW_KEY_V);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (freecamKey.wasPressed()) toggleFreecam(client);
+            if (freecamEnabled && client.player != null && client.world != null && freecamCamera != null) tickFreecam(client);
             while (configKey.wasPressed()) {
                 if (client.currentScreen == null) client.setScreen(new FinderConfigScreen());
             }
@@ -136,6 +145,56 @@ public final class BaseFinderClient implements ClientModInitializer {
             }
             matrices.pop();
         });
+    }
+
+
+    private static void toggleFreecam(MinecraftClient client) {
+        if (client.player == null || client.world == null) return;
+        if (freecamEnabled) {
+            freecamEnabled = false;
+            client.setCameraEntity(client.player);
+            if (freecamCamera != null) {
+                freecamCamera.setRemoved(Entity.RemovalReason.DISCARDED);
+                freecamCamera = null;
+            }
+            notifyPlayer(client, "Freecam disabled.");
+            return;
+        }
+        Entity camera = EntityType.ARMOR_STAND.create(client.world, SpawnReason.LOAD);
+        if (camera == null) {
+            notifyPlayer(client, "Freecam could not create its camera entity.");
+            return;
+        }
+        camera.refreshPositionAndAngles(client.player.getX(), client.player.getEyeY(),
+                client.player.getZ(), client.player.getYaw(), client.player.getPitch());
+        camera.setNoGravity(true);
+        camera.noClip = true;
+        camera.setInvisible(true);
+        freecamCamera = camera;
+        freecamEnabled = true;
+        client.setCameraEntity(camera);
+        notifyPlayer(client, "Freecam enabled (V to return).");
+    }
+
+    private static void tickFreecam(MinecraftClient client) {
+        if (client.player == null || freecamCamera == null) return;
+        double forward = 0.0, strafe = 0.0, vertical = 0.0;
+        long window = client.getWindow().getHandle();
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_W) == GLFW.GLFW_PRESS) forward += 1.0;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_S) == GLFW.GLFW_PRESS) forward -= 1.0;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_D) == GLFW.GLFW_PRESS) strafe += 1.0;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_A) == GLFW.GLFW_PRESS) strafe -= 1.0;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS) vertical += 1.0;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS) vertical -= 1.0;
+        float yaw = client.player.getYaw();
+        double radians = Math.toRadians(yaw);
+        double dx = (strafe * Math.cos(radians) - forward * Math.sin(radians)) * freecamSpeed;
+        double dz = (forward * Math.cos(radians) + strafe * Math.sin(radians)) * freecamSpeed;
+        freecamCamera.setPosition(freecamCamera.getX() + dx, freecamCamera.getY() + vertical * freecamSpeed,
+                freecamCamera.getZ() + dz);
+        freecamCamera.setYaw(client.player.getYaw());
+        freecamCamera.setPitch(client.player.getPitch());
+        client.player.setVelocity(Vec3d.ZERO);
     }
 
     /**
@@ -352,9 +411,16 @@ public final class BaseFinderClient implements ClientModInitializer {
                     filterPage = (filterPage + 1) % pages; init();
                 }).dimensions(left + half + 8, navY, half, 20).build());
             } else if (activeTab.equals("Blatant")) {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Freecam: " + (freecamEnabled ? "ON" : "OFF") + "  [V]"), b -> {
+                    toggleFreecam(MinecraftClient.getInstance()); init();
+                }).dimensions(left, top, Math.min(360, contentWidth), 28).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Freecam speed: " + String.format(java.util.Locale.ROOT, "%.2f", freecamSpeed)), b -> {
+                    freecamSpeed = freecamSpeed >= 1.0 ? 0.15 : Math.round((freecamSpeed + 0.15) * 100.0) / 100.0;
+                    b.setMessage(Text.literal("Freecam speed: " + String.format(java.util.Locale.ROOT, "%.2f", freecamSpeed)));
+                }).dimensions(left, top + 34, Math.min(360, contentWidth), 24).build());
                 addDrawableChild(ButtonWidget.builder(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")), b -> {
                     oreXrayEnabled = !oreXrayEnabled; saveConfig(); if (enabled) tickCounter = 39; init();
-                }).dimensions(left, top, Math.min(360, contentWidth), 28).build());
+                }).dimensions(left, top + 64, Math.min(360, contentWidth), 28).build());
             } else {
                 addDrawableChild(ButtonWidget.builder(Text.literal("Accent: Purple / Blue"), b -> {
                     notifyPlayer(MinecraftClient.getInstance(), "Theme preview uses the Donut-inspired purple and blue palette.");
