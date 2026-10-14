@@ -1,22 +1,32 @@
 package net.minecraft.client.gl;
 
+import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.shaders.UniformType;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.util.Identifier;
 
 /**
  * Base Finder's depth-disabled highlight pipeline.
  *
- * Kept in Minecraft's pipeline package so the private vanilla registration
- * helper can register the custom pipeline for shader compilation.
+ * The 1.21.11 Yarn mappings do not expose vanilla's filled-box snippet, so
+ * this pipeline explicitly declares the same position/color shader setup.
  */
 public final class BaseFinderPipelines {
     public static final RenderPipeline THROUGH_WALL_FILL = RenderPipelines.register(
-            RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+            RenderPipeline.builder()
                     .withLocation(Identifier.of("basefinder", "pipeline/through_wall_fill"))
+                    .withVertexShader("core/position_color")
+                    .withFragmentShader("core/position_color")
+                    .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                    .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                    .withBlend(BlendFunction.TRANSLUCENT)
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withDepthWrite(false)
                     .withCull(false)
+                    .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
                     .build()
     );
 
