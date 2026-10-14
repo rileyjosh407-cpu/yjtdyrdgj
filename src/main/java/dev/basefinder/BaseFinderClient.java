@@ -3,7 +3,7 @@ package dev.basefinder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
@@ -21,10 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Standalone client-side Base Finder for Minecraft 1.21.11 + Fabric.
- * Scans only blocks already present in the client world.
- */
+/** Client-side Base Finder for Minecraft 1.21.11 + Fabric. */
 public final class BaseFinderClient implements ClientModInitializer {
     private static KeyBinding toggleKey;
     private static KeyBinding rescanKey;
@@ -86,8 +83,8 @@ public final class BaseFinderClient implements ClientModInitializer {
             }
         });
 
-        HudElementRegistry.addLast(Identifier.of("basefinder", "hud"),
-                (drawContext, tickCounter) -> renderHud(MinecraftClient.getInstance(), drawContext));
+        HudRenderCallback.EVENT.register((drawContext, tickCounter) ->
+                renderHud(MinecraftClient.getInstance(), drawContext));
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
@@ -102,7 +99,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static void scan(MinecraftClient client) {
         if (client.player == null || client.world == null) return;
         BlockPos center = client.player.getBlockPos();
-        Vec3d playerPos = client.player.getPos();
+        Vec3d playerPos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
         List<FoundBlock> results = new ArrayList<>();
 
         for (int x = -radius; x <= radius; x++) {
