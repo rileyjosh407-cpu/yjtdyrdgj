@@ -9,6 +9,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.BaseFinderRenderLayers;
 import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.render.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
@@ -104,6 +105,15 @@ public final class BaseFinderClient implements ClientModInitializer {
             Vec3d camera = client.player.getCameraPosVec(1.0F);
             matrices.push();
             matrices.translate(-camera.x, -camera.y, -camera.z);
+            // Draw a translucent, depth-disabled fill first. This remains visible
+            // through terrain even when Sodium/Iris alter the normal line pass.
+            VertexConsumer throughWall = context.consumers().getBuffer(BaseFinderRenderLayers.THROUGH_WALL_FILL);
+            for (FoundBlock item : found) {
+                BlockPos pos = item.pos();
+                drawThroughWallCube(matrices, throughWall, pos.getX(), pos.getY(), pos.getZ());
+            }
+
+            // Keep the normal crisp outline for blocks that are not occluded.
             VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
             for (FoundBlock item : found) {
                 BlockPos pos = item.pos();
@@ -114,6 +124,39 @@ public final class BaseFinderClient implements ClientModInitializer {
             }
             matrices.pop();
         });
+    }
+
+    /**
+     * Adds a translucent cube using the custom depth-disabled pipeline. The inset
+     * avoids overly bright seams where adjacent highlighted blocks touch.
+     */
+    private static void drawThroughWallCube(net.minecraft.client.util.math.MatrixStack matrices,
+                                            VertexConsumer out, int x, int y, int z) {
+        var matrix = matrices.peek().getPositionMatrix();
+        float x0 = x + 0.025f, y0 = y + 0.025f, z0 = z + 0.025f;
+        float x1 = x + 0.975f, y1 = y + 0.975f, z1 = z + 0.975f;
+        int alpha = 72;
+
+        // Front and back
+        vertex(out, matrix, x0, y0, z1, alpha); vertex(out, matrix, x1, y0, z1, alpha);
+        vertex(out, matrix, x1, y1, z1, alpha); vertex(out, matrix, x0, y1, z1, alpha);
+        vertex(out, matrix, x1, y0, z0, alpha); vertex(out, matrix, x0, y0, z0, alpha);
+        vertex(out, matrix, x0, y1, z0, alpha); vertex(out, matrix, x1, y1, z0, alpha);
+        // Left and right
+        vertex(out, matrix, x0, y0, z0, alpha); vertex(out, matrix, x0, y0, z1, alpha);
+        vertex(out, matrix, x0, y1, z1, alpha); vertex(out, matrix, x0, y1, z0, alpha);
+        vertex(out, matrix, x1, y0, z1, alpha); vertex(out, matrix, x1, y0, z0, alpha);
+        vertex(out, matrix, x1, y1, z0, alpha); vertex(out, matrix, x1, y1, z1, alpha);
+        // Top and bottom
+        vertex(out, matrix, x0, y1, z1, alpha); vertex(out, matrix, x1, y1, z1, alpha);
+        vertex(out, matrix, x1, y1, z0, alpha); vertex(out, matrix, x0, y1, z0, alpha);
+        vertex(out, matrix, x0, y0, z0, alpha); vertex(out, matrix, x1, y0, z0, alpha);
+        vertex(out, matrix, x1, y0, z1, alpha); vertex(out, matrix, x0, y0, z1, alpha);
+    }
+
+    private static void vertex(VertexConsumer out, org.joml.Matrix4f matrix,
+                               float x, float y, float z, int alpha) {
+        out.vertex(matrix, x, y, z).color(51, 255, 221, alpha);
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
