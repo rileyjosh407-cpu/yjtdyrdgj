@@ -171,7 +171,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         camera.noClip = true;
         camera.setInvisible(true);
         camera.setId(-1337);
-        client.world.addEntity(-1337, camera);
+        client.world.addEntity(camera);
         freecamCamera = camera;
         freecamEnabled = true;
         client.setCameraEntity(camera);
