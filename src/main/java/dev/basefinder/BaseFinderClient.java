@@ -238,7 +238,8 @@ public final class BaseFinderClient implements ClientModInitializer {
 
         @Override
         public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-            renderBackground(context, mouseX, mouseY, delta);
+            // Avoid the vanilla blurred background: some clients already blur screens and crash if it runs twice.
+            context.fill(0, 0, width, height, 0xC0100818);
             context.fill(width / 2 - 150, height / 4 - 30, width / 2 + 150, height / 4 + 175, 0xD51B1028);
             context.drawCenteredTextWithShadow(textRenderer, title, width / 2, height / 4 - 18, 0xFFD36BFF);
             context.drawCenteredTextWithShadow(textRenderer,
