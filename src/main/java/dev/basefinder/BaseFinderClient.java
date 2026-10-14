@@ -267,94 +267,134 @@ public final class BaseFinderClient implements ClientModInitializer {
 
     private static final class FinderConfigScreen extends Screen {
         private int filterPage = 0;
+        private String activeTab = "Visual";
         private static final int FILTERS_PER_PAGE = 10;
 
-        protected FinderConfigScreen() { super(Text.literal("Base Finder Settings")); }
+        protected FinderConfigScreen() { super(Text.literal("Donut Client")); }
 
         @Override
         protected void init() {
             clearChildren();
-            int cx = width / 2;
-            int panelWidth = Math.min(430, width - 24);
-            int left = cx - panelWidth / 2;
-            int top = 42;
-            addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
-                chunkFinderEnabled = !chunkFinderEnabled;
-                b.setMessage(moduleLabel()); saveConfig();
-                if (enabled) tickCounter = 39;
-            }).dimensions(left, top, panelWidth, 20).build());
-            int half = (panelWidth - 8) / 2;
-            addDrawableChild(ButtonWidget.builder(sensitivityLabel(), b -> {
-                sensitivity = sensitivity % 5 + 1; b.setMessage(sensitivityLabel()); saveConfig();
-                if (enabled) tickCounter = 39;
-            }).dimensions(left, top + 27, half, 20).build());
-            addDrawableChild(ButtonWidget.builder(distanceLabel(), b -> {
-                simulationDistance = simulationDistance >= 16 ? 2 : simulationDistance + 2;
-                b.setMessage(distanceLabel()); saveConfig(); if (enabled) tickCounter = 39;
-            }).dimensions(left + half + 8, top + 27, half, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")), b -> {
-                oreXrayEnabled = !oreXrayEnabled;
-                b.setMessage(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")));
-                saveConfig(); if (enabled) tickCounter = 39;
-            }).dimensions(left, top + 81, panelWidth, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")), b -> {
-                highlightsEnabled = !highlightsEnabled;
-                b.setMessage(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")));
-                saveConfig();
-            }).dimensions(left, top + 108, panelWidth, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks"), b -> {
-                radius = radius >= MAX_RADIUS ? MIN_RADIUS : radius + 8;
-                b.setMessage(Text.literal("Scan radius: " + radius + " blocks")); saveConfig();
-                if (enabled) tickCounter = 39;
-            }).dimensions(left, top + 54, panelWidth, 20).build());
+            int side = Math.max(155, Math.min(195, width / 5));
+            int left = side + 18;
+            int contentWidth = Math.max(250, width - left - 18);
+            int top = 58;
 
-            int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
-            int first = filterPage * FILTERS_PER_PAGE;
-            for (int i = first; i < Math.min(first + FILTERS_PER_PAGE, filterBlocks.size()); i++) {
-                final Block block = filterBlocks.get(i);
-                int local = i - first;
-                int bx = left + (local % 2) * (half + 8);
-                int by = top + 132 + (local / 2) * 22;
-                addDrawableChild(ButtonWidget.builder(filterLabel(block), b -> {
-                    blockFilters.put(block, !blockFilters.getOrDefault(block, true));
-                    b.setMessage(filterLabel(block)); saveConfig(); if (enabled) tickCounter = 39;
-                }).dimensions(bx, by, half, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("◉  Visual"), b -> { activeTab = "Visual"; init(); })
+                    .dimensions(12, 112, side - 24, 24).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("◇  Blatant"), b -> { activeTab = "Blatant"; init(); })
+                    .dimensions(12, 141, side - 24, 24).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("☆  Favorites"), b -> { activeTab = "Favorites"; init(); })
+                    .dimensions(12, 170, side - 24, 24).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("◎  Appearance"), b -> { activeTab = "Appearance"; init(); })
+                    .dimensions(12, 226, side - 24, 24).build());
+
+            if (activeTab.equals("Visual") || activeTab.equals("Favorites")) {
+                int cardW = Math.max(220, (contentWidth - 12) / 2);
+                int card2X = left + cardW + 12;
+                addDrawableChild(ButtonWidget.builder(Text.literal("Base Finder     " + (enabled ? "ON" : "OFF")), b -> {
+                    enabled = !enabled;
+                    if (!enabled) { found.clear(); scanStatus = "Disabled"; }
+                    else { scanStatus = "Scanning nearby loaded blocks..."; tickCounter = 39; }
+                    notifyPlayer(MinecraftClient.getInstance(), "Base Finder: " + (enabled ? "ON" : "OFF"));
+                    init();
+                }).dimensions(left, top, cardW, 28).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Ore X-ray       " + (oreXrayEnabled ? "ON" : "OFF")), b -> {
+                    oreXrayEnabled = !oreXrayEnabled;
+                    saveConfig();
+                    if (enabled) tickCounter = 39;
+                    init();
+                }).dimensions(card2X, top, cardW, 28).build());
+
+                addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
+                    chunkFinderEnabled = !chunkFinderEnabled;
+                    b.setMessage(moduleLabel()); saveConfig();
+                    if (enabled) tickCounter = 39;
+                }).dimensions(left, top + 36, cardW, 22).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")), b -> {
+                    highlightsEnabled = !highlightsEnabled;
+                    b.setMessage(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")));
+                    saveConfig();
+                }).dimensions(card2X, top + 36, cardW, 22).build());
+
+                int half = (contentWidth - 8) / 2;
+                addDrawableChild(ButtonWidget.builder(sensitivityLabel(), b -> {
+                    sensitivity = sensitivity % 5 + 1; b.setMessage(sensitivityLabel()); saveConfig();
+                    if (enabled) tickCounter = 39;
+                }).dimensions(left, top + 64, half, 20).build());
+                addDrawableChild(ButtonWidget.builder(distanceLabel(), b -> {
+                    simulationDistance = simulationDistance >= 16 ? 2 : simulationDistance + 2;
+                    b.setMessage(distanceLabel()); saveConfig(); if (enabled) tickCounter = 39;
+                }).dimensions(left + half + 8, top + 64, half, 20).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks"), b -> {
+                    radius = radius >= MAX_RADIUS ? MIN_RADIUS : radius + 8;
+                    b.setMessage(Text.literal("Scan radius: " + radius + " blocks")); saveConfig();
+                    if (enabled) tickCounter = 39;
+                }).dimensions(left, top + 90, contentWidth, 20).build());
+
+                int pages = Math.max(1, (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE);
+                int first = filterPage * FILTERS_PER_PAGE;
+                for (int i = first; i < Math.min(first + FILTERS_PER_PAGE, filterBlocks.size()); i++) {
+                    final Block block = filterBlocks.get(i);
+                    int local = i - first;
+                    int bx = left + (local % 2) * (half + 8);
+                    int by = top + 140 + (local / 2) * 22;
+                    addDrawableChild(ButtonWidget.builder(filterLabel(block), b -> {
+                        blockFilters.put(block, !blockFilters.getOrDefault(block, true));
+                        b.setMessage(filterLabel(block)); saveConfig(); if (enabled) tickCounter = 39;
+                    }).dimensions(bx, by, half, 20).build());
+                }
+                int navY = top + 140 + 5 * 22 + 2;
+                addDrawableChild(ButtonWidget.builder(Text.literal("< Previous"), b -> {
+                    filterPage = (filterPage + pages - 1) % pages; init();
+                }).dimensions(left, navY, half, 20).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Next >"), b -> {
+                    filterPage = (filterPage + 1) % pages; init();
+                }).dimensions(left + half + 8, navY, half, 20).build());
+            } else if (activeTab.equals("Blatant")) {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")), b -> {
+                    oreXrayEnabled = !oreXrayEnabled; saveConfig(); if (enabled) tickCounter = 39; init();
+                }).dimensions(left, top, Math.min(360, contentWidth), 28).build());
+            } else {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Accent: Purple / Blue"), b -> {
+                    notifyPlayer(MinecraftClient.getInstance(), "Theme preview uses the Donut-inspired purple and blue palette.");
+                }).dimensions(left, top, Math.min(360, contentWidth), 28).build());
             }
-            int navY = top + 132 + 5 * 22 + 2;
-            addDrawableChild(ButtonWidget.builder(Text.literal("< Previous"), b -> {
-                filterPage = (filterPage + pages - 1) % pages; init();
-            }).dimensions(left, navY, half, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Next >"), b -> {
-                filterPage = (filterPage + 1) % pages; init();
-            }).dimensions(left + half + 8, navY, half, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                    .dimensions(cx - 55, navY + 26, 110, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Done  •  ESC"), b -> close())
+                    .dimensions(width - 116, height - 34, 100, 22).build());
         }
 
-        private Text moduleLabel() { return Text.literal("VISUALS  /  AMETHYST GEODE CLUES: " + (chunkFinderEnabled ? "ON" : "OFF")); }
+        private Text moduleLabel() { return Text.literal("Geode clues: " + (chunkFinderEnabled ? "ON" : "OFF")); }
         private Text sensitivityLabel() { return Text.literal("Sensitivity  " + sensitivity + " / 5"); }
         private Text distanceLabel() { return Text.literal("Simulation distance  " + simulationDistance + " chunks"); }
         private Text filterLabel(Block block) {
             String name = Registries.BLOCK.getId(block).getPath().replace('_', ' ');
             name = name.substring(0, 1).toUpperCase() + name.substring(1);
-            return Text.literal((blockFilters.getOrDefault(block, true) ? "✓  " : "✕  ") + name);
+            return Text.literal((blockFilters.getOrDefault(block, true) ? "●  " : "○  ") + name);
         }
 
         @Override
         public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-            context.fill(0, 0, width, height, 0xE9080D18);
-            int panelWidth = Math.min(430, width - 24);
-            int left = width / 2 - panelWidth / 2;
-            context.fill(left - 10, 28, left + panelWidth + 10, Math.min(height - 8, 370), 0xF0182235);
-            context.fill(left - 10, 28, left + panelWidth + 10, 32, 0xFF9D75FF);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("BASE FINDER"), width / 2, 10, 0xFFE0B7FF);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("SETTINGS  •  BLOCK FILTERS"), width / 2, 31, 0xFFB9C7E8);
-            int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
-            context.drawTextWithShadow(textRenderer,
-                    Text.literal("Toggle ore X-ray and the blocks it highlights  •  Page " + (filterPage + 1) + "/" + pages),
-                    left, 164, 0xFFD5DDF0);
-            context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("F8 menu  •  G scanner  •  R rescan  •  [ ] radius"), width / 2, height - 14, 0xFF9CAAC4);
+            context.fill(0, 0, width, height, 0xE9090C14);
+            int side = Math.max(155, Math.min(195, width / 5));
+            context.fill(3, 3, side + 8, height - 3, 0xF01A1428);
+            context.fill(3, 3, side + 8, 5, 0xFFB64DFF);
+            context.fill(side + 14, 3, width - 3, 45, 0xF011151E);
+            context.fill(side + 14, 46, width - 3, height - 3, 0xF010131B);
+            context.fill(12, 14, 32, 34, 0xFFB64DFF);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("●"), 22, 18, 0xFFFFFFFF);
+            context.drawTextWithShadow(textRenderer, Text.literal("DONUT"), 42, 15, 0xFFF6F3FF);
+            context.drawTextWithShadow(textRenderer, Text.literal("CLIENT"), 42, 29, 0xFF9FA6B8);
+            context.fill(14, 48, side - 4, 49, 0xFF383044);
+            context.drawTextWithShadow(textRenderer, Text.literal("MODULES"), 20, 65, 0xFF9A91AC);
+            context.drawTextWithShadow(textRenderer, Text.literal("GENERAL"), 20, 205, 0xFF9A91AC);
+            context.fill(12, height - 50, side - 4, height - 12, 0xFF0B0D14);
+            context.fill(18, height - 34, 26, height - 26, 0xFFB64DFF);
+            context.drawTextWithShadow(textRenderer, Text.literal("Donut Client"), 34, height - 40, 0xFFF6F3FF);
+            context.drawTextWithShadow(textRenderer, Text.literal((enabled ? "1" : "0") + " / 2 active"), 34, height - 26, 0xFF9FA6B8);
+            context.drawTextWithShadow(textRenderer, Text.literal(activeTab + " modules"), side + 28, 17, 0xFFF1F2F7);
+            context.drawTextWithShadow(textRenderer, Text.literal("Search modules..."), width - 175, 17, 0xFF7E8799);
+            context.drawTextWithShadow(textRenderer, Text.literal("Left click: toggle  /  module cards: settings"), side + 18, height - 18, 0xFF9DA5B5);
             super.render(context, mouseX, mouseY, delta);
         }
 
