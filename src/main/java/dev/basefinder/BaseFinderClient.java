@@ -67,7 +67,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
             Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
             Blocks.NETHER_QUARTZ_ORE, Blocks.NETHER_GOLD_ORE, Blocks.ANCIENT_DEBRIS);
-    private static final List<Block> filterBlocks = new ArrayList<>(List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD));
+    private static final List<Block> filterBlocks = new ArrayList<>(List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD, Blocks.SPAWNER));
     static { filterBlocks.addAll(ORE_BLOCKS); }
     private static String scanStatus = "Press G to enable";
     private static final KeyBinding.Category CATEGORY =
@@ -170,6 +170,8 @@ public final class BaseFinderClient implements ClientModInitializer {
         camera.setNoGravity(true);
         camera.noClip = true;
         camera.setInvisible(true);
+        camera.setId(-1337);
+        client.world.addEntity(-1337, camera);
         freecamCamera = camera;
         freecamEnabled = true;
         client.setCameraEntity(camera);
@@ -192,9 +194,10 @@ public final class BaseFinderClient implements ClientModInitializer {
         double dz = (forward * Math.cos(radians) + strafe * Math.sin(radians)) * freecamSpeed;
         freecamCamera.setPosition(freecamCamera.getX() + dx, freecamCamera.getY() + vertical * freecamSpeed,
                 freecamCamera.getZ() + dz);
+        // Follow the player's live view angles, but don't mutate player velocity each tick;
+        // doing so can fight vanilla movement/network updates and cause jitter.
         freecamCamera.setYaw(client.player.getYaw());
         freecamCamera.setPitch(client.player.getPitch());
-        client.player.setVelocity(Vec3d.ZERO);
     }
 
     /**
