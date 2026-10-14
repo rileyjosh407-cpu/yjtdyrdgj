@@ -3,12 +3,6 @@ package dev.basefinder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.Box;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
@@ -24,6 +18,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.particle.ParticleTypes;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -44,6 +39,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
+    private static int highlightTick = 0;
     private static boolean highlightsEnabled = true;
     private static int radius = 24;
     private static int sensitivity = 3;
@@ -93,31 +89,18 @@ public final class BaseFinderClient implements ClientModInitializer {
                 notifyPlayer(client, "Base Finder radius: " + radius + " blocks");
                 if (enabled) tickCounter = 39;
             }
+            if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 5) {
+                highlightTick = 0;
+                highlightFoundBlocks(client);
+            }
             if (enabled && client.player != null && client.world != null && ++tickCounter >= 40) {
                 tickCounter = 0;
                 scan(client);
             }
         });
-        // Compact rendering: draw block-space outlines instead of a large HUD or particle spam.
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (!enabled || !highlightsEnabled || client.world == null || client.player == null || found.isEmpty()) return;
-            MatrixStack matrices = context.matrices();
-            if (matrices == null) return;
-            Vec3d camera = client.gameRenderer.getCamera().getPos();
-            matrices.push();
-            matrices.translate(-camera.x, -camera.y, -camera.z);
-            VertexConsumer lines = context.consumers().getBuffer(RenderLayer.LINES);
-            try {
-                for (FoundBlock item : found) {
-                    BlockPos pos = item.pos();
-                    WorldRenderer.drawBox(matrices, lines, new Box(pos).expand(0.003),
-                            0.15f, 1.0f, 0.35f, 1.0f);
-                }
-            } finally {
-                matrices.pop();
-            }
-        });
+        // Small bright markers are emitted only at detected blocks; no large HUD overlay.
+        // Use the known 1.21.11 client particle API while the renderer-specific API is corrected.
+        
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
@@ -196,6 +179,24 @@ public final class BaseFinderClient implements ClientModInitializer {
         found.clear();
         found.addAll(results.subList(0, Math.min(MAX_RESULTS, results.size())));
         scanStatus = results.size() + " clues found; showing nearest " + found.size();
+    }
+
+    private static void highlightFoundBlocks(MinecraftClient client) {
+        if (client.world == null) return;
+        for (FoundBlock item : found) {
+            BlockPos p = item.pos();
+            double x = p.getX() + 0.5, z = p.getZ() + 0.5;
+            double[][] markers = {
+                    {-0.42, 0.95, -0.42}, {0.42, 0.95, -0.42},
+                    {-0.42, 0.95, 0.42}, {0.42, 0.95, 0.42},
+                    {-0.42, 0.10, -0.42}, {0.42, 0.10, -0.42},
+                    {-0.42, 0.10, 0.42}, {0.42, 0.10, 0.42}
+            };
+            for (double[] marker : markers) {
+                client.world.addParticleClient(ParticleTypes.END_ROD,
+                        x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
+            }
+        }
     }
 
     private static boolean isBaseClue(Block block) {
