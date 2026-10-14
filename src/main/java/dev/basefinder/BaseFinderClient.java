@@ -104,7 +104,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             Vec3d camera = client.player.getCameraPosVec(1.0F);
             matrices.push();
             matrices.translate(-camera.x, -camera.y, -camera.z);
-            VertexConsumer lines = context.consumers().getBuffer(RenderLayers.secondaryBlockOutline());
+            VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
             for (FoundBlock item : found) {
                 BlockPos pos = item.pos();
                 var state = client.world.getBlockState(pos);
