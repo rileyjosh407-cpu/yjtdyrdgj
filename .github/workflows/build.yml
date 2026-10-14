@@ -34,3 +34,5 @@ jobs:
             build/libs/base-finder-*.jar
             !build/libs/*-sources.jar
           if-no-files-found: error
+
+# Rebuild after the renderer outline update.
