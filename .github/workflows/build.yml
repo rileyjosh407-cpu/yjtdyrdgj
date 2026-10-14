@@ -38,3 +38,5 @@ jobs:
           if-no-files-found: error
 
 # Rebuild after the renderer outline update.
+
+# Rebuild on latest renderer API update.
