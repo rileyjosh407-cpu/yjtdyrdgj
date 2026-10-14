@@ -3,8 +3,8 @@ package net.minecraft.client.gl;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.minecraft.client.gl.UniformType;
+import net.minecraft.client.render.VertexFormats;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.util.Identifier;
 
@@ -26,7 +26,7 @@ public final class BaseFinderPipelines {
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withDepthWrite(false)
                     .withCull(false)
-                    .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+                    .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.QUADS)
                     .build()
     );
 
