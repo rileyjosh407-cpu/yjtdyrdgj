@@ -40,3 +40,5 @@ jobs:
 # Rebuild after the renderer outline update.
 
 # Rebuild on latest renderer API update.
+
+# Validate the 1.21.11 outline API fix.
