@@ -44,13 +44,25 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
     private static boolean highlightsEnabled = true;
+    private static boolean oreXrayEnabled = false;
     private static int radius = 24;
     private static int sensitivity = 3;
     private static int simulationDistance = 4;
-    private static final int MIN_RADIUS = 8, MAX_RADIUS = 64, MAX_RESULTS = 12;
+    private static final int MIN_RADIUS = 8, MAX_RADIUS = 64, MAX_RESULTS = 64;
     private static final List<FoundBlock> found = new ArrayList<>();
     private static final Map<Block, Boolean> blockFilters = new LinkedHashMap<>();
-    private static final List<Block> filterBlocks = List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD);
+    private static final List<Block> ORE_BLOCKS = List.of(
+            Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
+            Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE,
+            Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
+            Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE,
+            Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+            Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE,
+            Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
+            Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
+            Blocks.NETHER_QUARTZ_ORE, Blocks.NETHER_GOLD_ORE, Blocks.ANCIENT_DEBRIS);
+    private static final List<Block> filterBlocks = new ArrayList<>(List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD));
+    static { filterBlocks.addAll(ORE_BLOCKS); }
     private static String scanStatus = "Press G to enable";
     private static final KeyBinding.Category CATEGORY =
             KeyBinding.Category.create(Identifier.of("basefinder", "controls"));
@@ -183,6 +195,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         radius = clamp(parseInt(p.getProperty("radius"), 24), MIN_RADIUS, MAX_RADIUS);
         chunkFinderEnabled = Boolean.parseBoolean(p.getProperty("chunkFinderEnabled", "true"));
         highlightsEnabled = Boolean.parseBoolean(p.getProperty("highlightsEnabled", "true"));
+        oreXrayEnabled = Boolean.parseBoolean(p.getProperty("oreXrayEnabled", "false"));
         blockFilters.clear();
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
@@ -202,6 +215,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         p.setProperty("radius", Integer.toString(radius));
         p.setProperty("chunkFinderEnabled", Boolean.toString(chunkFinderEnabled));
         p.setProperty("highlightsEnabled", Boolean.toString(highlightsEnabled));
+        p.setProperty("oreXrayEnabled", Boolean.toString(oreXrayEnabled));
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
             p.setProperty(key, Boolean.toString(blockFilters.getOrDefault(block, true)));
@@ -224,7 +238,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                     BlockPos pos = center.add(x, y, z);
                     if (!client.world.isChunkLoaded(pos)) continue;
                     Block block = client.world.getBlockState(pos).getBlock();
-                    if (isBaseClue(block)) {
+                    if ((isOreBlock(block) && oreXrayEnabled && blockFilters.getOrDefault(block, true)) || isBaseClue(block)) {
                         double distance = Math.sqrt(pos.getSquaredDistance(playerPos));
                         results.add(new FoundBlock(pos.toImmutable(), Registries.BLOCK.getId(block).getPath(), distance));
                     }
@@ -238,7 +252,10 @@ public final class BaseFinderClient implements ClientModInitializer {
     }
 
 
+    private static boolean isOreBlock(Block block) { return ORE_BLOCKS.contains(block); }
+
     private static boolean isBaseClue(Block block) {
+        if (isOreBlock(block)) return false;
         // Only explicitly supported filter blocks are clues. Unknown blocks (including air,
         // grass, dirt, stone, and other terrain) must never be added to the results.
         if (!blockFilters.containsKey(block) || !blockFilters.get(block)) return false;
@@ -275,11 +292,16 @@ public final class BaseFinderClient implements ClientModInitializer {
                 simulationDistance = simulationDistance >= 16 ? 2 : simulationDistance + 2;
                 b.setMessage(distanceLabel()); saveConfig(); if (enabled) tickCounter = 39;
             }).dimensions(left + half + 8, top + 27, half, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")), b -> {
+                oreXrayEnabled = !oreXrayEnabled;
+                b.setMessage(Text.literal("Ore X-ray: " + (oreXrayEnabled ? "ON" : "OFF")));
+                saveConfig(); if (enabled) tickCounter = 39;
+            }).dimensions(left, top + 81, panelWidth, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")), b -> {
                 highlightsEnabled = !highlightsEnabled;
                 b.setMessage(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")));
                 saveConfig();
-            }).dimensions(left, top + 81, panelWidth, 20).build());
+            }).dimensions(left, top + 108, panelWidth, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks"), b -> {
                 radius = radius >= MAX_RADIUS ? MIN_RADIUS : radius + 8;
                 b.setMessage(Text.literal("Scan radius: " + radius + " blocks")); saveConfig();
@@ -292,13 +314,13 @@ public final class BaseFinderClient implements ClientModInitializer {
                 final Block block = filterBlocks.get(i);
                 int local = i - first;
                 int bx = left + (local % 2) * (half + 8);
-                int by = top + 105 + (local / 2) * 22;
+                int by = top + 132 + (local / 2) * 22;
                 addDrawableChild(ButtonWidget.builder(filterLabel(block), b -> {
                     blockFilters.put(block, !blockFilters.getOrDefault(block, true));
                     b.setMessage(filterLabel(block)); saveConfig(); if (enabled) tickCounter = 39;
                 }).dimensions(bx, by, half, 20).build());
             }
-            int navY = top + 105 + 5 * 22 + 2;
+            int navY = top + 132 + 5 * 22 + 2;
             addDrawableChild(ButtonWidget.builder(Text.literal("< Previous"), b -> {
                 filterPage = (filterPage + pages - 1) % pages; init();
             }).dimensions(left, navY, half, 20).build());
@@ -329,8 +351,8 @@ public final class BaseFinderClient implements ClientModInitializer {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("SETTINGS  •  BLOCK FILTERS"), width / 2, 31, 0xFFB9C7E8);
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             context.drawTextWithShadow(textRenderer,
-                    Text.literal("Toggle the blocks that count as clues  •  Page " + (filterPage + 1) + "/" + pages),
-                    left, 137, 0xFFD5DDF0);
+                    Text.literal("Toggle ore X-ray and the blocks it highlights  •  Page " + (filterPage + 1) + "/" + pages),
+                    left, 164, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("F8 menu  •  G scanner  •  R rescan  •  [ ] radius"), width / 2, height - 14, 0xFF9CAAC4);
             super.render(context, mouseX, mouseY, delta);
