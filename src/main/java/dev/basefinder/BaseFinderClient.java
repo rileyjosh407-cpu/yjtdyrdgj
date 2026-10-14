@@ -11,7 +11,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.render.VertexConsumer;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.util.math.Box;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -97,12 +97,12 @@ public final class BaseFinderClient implements ClientModInitializer {
                 scan(client);
             }
         });
-        WorldRenderEvents.LAST.register(context -> {
+        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             MinecraftClient client = MinecraftClient.getInstance();
             if (!enabled || !highlightsEnabled || client.world == null || client.player == null || found.isEmpty()) return;
-            var matrices = context.matrixStack();
+            var matrices = context.matrices();
             if (matrices == null) return;
-            Vec3d camera = client.player.getCameraPosVec(context.tickCounter().getTickDelta(false));
+            Vec3d camera = client.player.getCameraPosVec(1.0F);
             matrices.push();
             matrices.translate(-camera.x, -camera.y, -camera.z);
             VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
