@@ -28,6 +28,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Properties;
 
 /** Client-side Base Finder for Minecraft 1.21.11 + Fabric. */
@@ -41,6 +43,8 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static int simulationDistance = 4;
     private static final int MIN_RADIUS = 8, MAX_RADIUS = 64, MAX_RESULTS = 12;
     private static final List<FoundBlock> found = new ArrayList<>();
+    private static final Map<Block, Boolean> blockFilters = new LinkedHashMap<>();
+    private static final List<Block> filterBlocks = List.of(Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD);
     private static String scanStatus = "Press G to enable";
     private static final KeyBinding.Category CATEGORY =
             KeyBinding.Category.create(Identifier.of("basefinder", "controls"));
@@ -114,6 +118,11 @@ public final class BaseFinderClient implements ClientModInitializer {
         simulationDistance = clamp(parseInt(p.getProperty("simulationDistance"), 4), 2, 16);
         radius = clamp(parseInt(p.getProperty("radius"), 24), MIN_RADIUS, MAX_RADIUS);
         chunkFinderEnabled = Boolean.parseBoolean(p.getProperty("chunkFinderEnabled", "true"));
+        blockFilters.clear();
+        for (Block block : filterBlocks) {
+            String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
+            blockFilters.put(block, Boolean.parseBoolean(p.getProperty(key, "true")));
+        }
     }
 
     private static int parseInt(String value, int fallback) {
@@ -127,6 +136,10 @@ public final class BaseFinderClient implements ClientModInitializer {
         p.setProperty("simulationDistance", Integer.toString(simulationDistance));
         p.setProperty("radius", Integer.toString(radius));
         p.setProperty("chunkFinderEnabled", Boolean.toString(chunkFinderEnabled));
+        for (Block block : filterBlocks) {
+            String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
+            p.setProperty(key, Boolean.toString(blockFilters.getOrDefault(block, true)));
+        }
         try (OutputStream out = Files.newOutputStream(configPath())) {
             p.store(out, "Base Finder settings");
         } catch (IOException ignored) { }
@@ -159,19 +172,11 @@ public final class BaseFinderClient implements ClientModInitializer {
     }
 
     private static boolean isBaseClue(Block block) {
-        boolean storage = block == Blocks.CHEST || block == Blocks.TRAPPED_CHEST || block == Blocks.BARREL
-                || block == Blocks.ENDER_CHEST || block == Blocks.SHULKER_BOX || block == Blocks.HOPPER
-                || block == Blocks.DROPPER || block == Blocks.DISPENSER || block == Blocks.FURNACE
-                || block == Blocks.BLAST_FURNACE || block == Blocks.SMOKER || block == Blocks.CRAFTING_TABLE
-                || block == Blocks.ENCHANTING_TABLE || block == Blocks.ANVIL || block == Blocks.CHIPPED_ANVIL
-                || block == Blocks.DAMAGED_ANVIL || block == Blocks.BREWING_STAND || block == Blocks.SMITHING_TABLE
-                || block == Blocks.GRINDSTONE || block == Blocks.STONECUTTER || block == Blocks.LECTERN
-                || block == Blocks.LOOM || block == Blocks.CARTOGRAPHY_TABLE || block == Blocks.JUKEBOX
-                || block == Blocks.BEEHIVE || block == Blocks.BEE_NEST;
+        if (!blockFilters.getOrDefault(block, true)) return false;
         boolean geode = block == Blocks.BUDDING_AMETHYST || block == Blocks.AMETHYST_BLOCK
                 || block == Blocks.AMETHYST_CLUSTER || block == Blocks.LARGE_AMETHYST_BUD
                 || block == Blocks.MEDIUM_AMETHYST_BUD || block == Blocks.SMALL_AMETHYST_BUD;
-        return (chunkFinderEnabled && geode) || storage;
+        return !geode || chunkFinderEnabled;
     }
 
     private static void renderHud(MinecraftClient client, DrawContext context) {
@@ -198,52 +203,85 @@ public final class BaseFinderClient implements ClientModInitializer {
     }
 
     private static final class FinderConfigScreen extends Screen {
+        private int filterPage = 0;
+        private static final int FILTERS_PER_PAGE = 10;
+
         protected FinderConfigScreen() { super(Text.literal("Base Finder Settings")); }
 
         @Override
         protected void init() {
+            clearChildren();
             int cx = width / 2;
-            int top = height / 4;
+            int panelWidth = Math.min(430, width - 24);
+            int left = cx - panelWidth / 2;
+            int top = 42;
             addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
                 chunkFinderEnabled = !chunkFinderEnabled;
-                b.setMessage(moduleLabel());
-                saveConfig();
-            }).dimensions(cx - 120, top, 240, 24).build());
+                b.setMessage(moduleLabel()); saveConfig();
+                if (enabled) tickCounter = 39;
+            }).dimensions(left, top, panelWidth, 20).build());
+            int half = (panelWidth - 8) / 2;
             addDrawableChild(ButtonWidget.builder(sensitivityLabel(), b -> {
-                sensitivity = sensitivity % 5 + 1;
-                b.setMessage(sensitivityLabel());
-                saveConfig();
-            }).dimensions(cx - 120, top + 32, 240, 24).build());
+                sensitivity = sensitivity % 5 + 1; b.setMessage(sensitivityLabel()); saveConfig();
+                if (enabled) tickCounter = 39;
+            }).dimensions(left, top + 27, half, 20).build());
             addDrawableChild(ButtonWidget.builder(distanceLabel(), b -> {
                 simulationDistance = simulationDistance >= 16 ? 2 : simulationDistance + 2;
-                b.setMessage(distanceLabel());
-                saveConfig();
-                if (enabled) tickCounter = 39;
-            }).dimensions(cx - 120, top + 64, 240, 24).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks (click to increase)"), b -> {
+                b.setMessage(distanceLabel()); saveConfig(); if (enabled) tickCounter = 39;
+            }).dimensions(left + half + 8, top + 27, half, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks"), b -> {
                 radius = radius >= MAX_RADIUS ? MIN_RADIUS : radius + 8;
-                b.setMessage(Text.literal("Scan radius: " + radius + " blocks (click to increase)"));
-                saveConfig();
+                b.setMessage(Text.literal("Scan radius: " + radius + " blocks")); saveConfig();
                 if (enabled) tickCounter = 39;
-            }).dimensions(cx - 120, top + 96, 240, 24).build());
+            }).dimensions(left, top + 54, panelWidth, 20).build());
+
+            int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
+            int first = filterPage * FILTERS_PER_PAGE;
+            for (int i = first; i < Math.min(first + FILTERS_PER_PAGE, filterBlocks.size()); i++) {
+                final Block block = filterBlocks.get(i);
+                int local = i - first;
+                int bx = left + (local % 2) * (half + 8);
+                int by = top + 105 + (local / 2) * 22;
+                addDrawableChild(ButtonWidget.builder(filterLabel(block), b -> {
+                    blockFilters.put(block, !blockFilters.getOrDefault(block, true));
+                    b.setMessage(filterLabel(block)); saveConfig(); if (enabled) tickCounter = 39;
+                }).dimensions(bx, by, half, 20).build());
+            }
+            int navY = top + 105 + 5 * 22 + 2;
+            addDrawableChild(ButtonWidget.builder(Text.literal("< Previous"), b -> {
+                filterPage = (filterPage + pages - 1) % pages; init();
+            }).dimensions(left, navY, half, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Next >"), b -> {
+                filterPage = (filterPage + 1) % pages; init();
+            }).dimensions(left + half + 8, navY, half, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-                    .dimensions(cx - 60, top + 136, 120, 24).build());
+                    .dimensions(cx - 55, navY + 26, 110, 20).build());
         }
 
-        private Text moduleLabel() {
-            return Text.literal("Visuals > Chunk Finder: " + (chunkFinderEnabled ? "ON" : "OFF"));
+        private Text moduleLabel() { return Text.literal("VISUALS  /  AMETHYST GEODE CLUES: " + (chunkFinderEnabled ? "ON" : "OFF")); }
+        private Text sensitivityLabel() { return Text.literal("Sensitivity  " + sensitivity + " / 5"); }
+        private Text distanceLabel() { return Text.literal("Simulation distance  " + simulationDistance + " chunks"); }
+        private Text filterLabel(Block block) {
+            String name = Registries.BLOCK.getId(block).getPath().replace('_', ' ');
+            name = name.substring(0, 1).toUpperCase() + name.substring(1);
+            return Text.literal((blockFilters.getOrDefault(block, true) ? "✓  " : "✕  ") + name);
         }
-        private Text sensitivityLabel() { return Text.literal("Sensitivity: " + sensitivity + "/5 (click to cycle)"); }
-        private Text distanceLabel() { return Text.literal("Simulation distance: " + simulationDistance + " chunks (click to cycle)"); }
 
         @Override
         public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-            // Avoid the vanilla blurred background: some clients already blur screens and crash if it runs twice.
-            context.fill(0, 0, width, height, 0xC0100818);
-            context.fill(width / 2 - 150, height / 4 - 30, width / 2 + 150, height / 4 + 175, 0xD51B1028);
-            context.drawCenteredTextWithShadow(textRenderer, title, width / 2, height / 4 - 18, 0xFFD36BFF);
+            context.fill(0, 0, width, height, 0xE9080D18);
+            int panelWidth = Math.min(430, width - 24);
+            int left = width / 2 - panelWidth / 2;
+            context.fill(left - 10, 28, left + panelWidth + 10, Math.min(height - 8, 370), 0xF0182235);
+            context.fill(left - 10, 28, left + panelWidth + 10, 32, 0xFF9D75FF);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("BASE FINDER"), width / 2, 10, 0xFFE0B7FF);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("SETTINGS  •  BLOCK FILTERS"), width / 2, 31, 0xFFB9C7E8);
+            int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
+            context.drawTextWithShadow(textRenderer,
+                    Text.literal("Toggle the blocks that count as clues  •  Page " + (filterPage + 1) + "/" + pages),
+                    left, 137, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("F8 opens this menu. Click settings to change them."), width / 2, height / 4 + 168, 0xFFE4C9FF);
+                    Text.literal("F8 menu  •  G scanner  •  R rescan  •  [ ] radius"), width / 2, height - 14, 0xFF9CAAC4);
             super.render(context, mouseX, mouseY, delta);
         }
 
