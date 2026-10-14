@@ -3,7 +3,7 @@
   "id": "basefinder",
   "version": "${version}",
   "name": "Base Finder",
-  "description": "A client-side nearby utility-block scanner for loaded chunks.",
+  "description": "A client-side Base Finder with configurable block filters and ore highlighting for client-visible loaded chunks.",
   "authors": ["BaseFinder"],
   "environment": "client",
   "entrypoints": {
