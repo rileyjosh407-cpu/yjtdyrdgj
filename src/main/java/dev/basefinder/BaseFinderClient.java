@@ -18,6 +18,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.particle.ParticleTypes;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -38,6 +39,8 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
+    private static int highlightTick = 0;
+    private static boolean highlightsEnabled = true;
     private static int radius = 24;
     private static int sensitivity = 3;
     private static int simulationDistance = 4;
@@ -86,6 +89,10 @@ public final class BaseFinderClient implements ClientModInitializer {
                 notifyPlayer(client, "Base Finder radius: " + radius + " blocks");
                 if (enabled) tickCounter = 39;
             }
+            if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 5) {
+                highlightTick = 0;
+                highlightFoundBlocks(client);
+            }
             if (enabled && client.player != null && client.world != null && ++tickCounter >= 40) {
                 tickCounter = 0;
                 scan(client);
@@ -118,6 +125,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         simulationDistance = clamp(parseInt(p.getProperty("simulationDistance"), 4), 2, 16);
         radius = clamp(parseInt(p.getProperty("radius"), 24), MIN_RADIUS, MAX_RADIUS);
         chunkFinderEnabled = Boolean.parseBoolean(p.getProperty("chunkFinderEnabled", "true"));
+        highlightsEnabled = Boolean.parseBoolean(p.getProperty("highlightsEnabled", "true"));
         blockFilters.clear();
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
@@ -136,6 +144,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         p.setProperty("simulationDistance", Integer.toString(simulationDistance));
         p.setProperty("radius", Integer.toString(radius));
         p.setProperty("chunkFinderEnabled", Boolean.toString(chunkFinderEnabled));
+        p.setProperty("highlightsEnabled", Boolean.toString(highlightsEnabled));
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
             p.setProperty(key, Boolean.toString(blockFilters.getOrDefault(block, true)));
@@ -177,6 +186,18 @@ public final class BaseFinderClient implements ClientModInitializer {
                 || block == Blocks.AMETHYST_CLUSTER || block == Blocks.LARGE_AMETHYST_BUD
                 || block == Blocks.MEDIUM_AMETHYST_BUD || block == Blocks.SMALL_AMETHYST_BUD;
         return !geode || chunkFinderEnabled;
+    }
+
+    private static void highlightFoundBlocks(MinecraftClient client) {
+        if (client.world == null) return;
+        for (FoundBlock item : found) {
+            BlockPos p = item.pos();
+            double x = p.getX() + 0.5, y = p.getY() + 0.5, z = p.getZ() + 0.5;
+            client.world.addParticle(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
+            client.world.addParticle(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z - 0.35, 0, 0.015, 0);
+            client.world.addParticle(ParticleTypes.END_ROD, x - 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
+            client.world.addParticle(ParticleTypes.END_ROD, x + 0.35, y + 0.55, z + 0.35, 0, 0.015, 0);
+        }
     }
 
     private static void renderHud(MinecraftClient client, DrawContext context) {
@@ -229,6 +250,11 @@ public final class BaseFinderClient implements ClientModInitializer {
                 simulationDistance = simulationDistance >= 16 ? 2 : simulationDistance + 2;
                 b.setMessage(distanceLabel()); saveConfig(); if (enabled) tickCounter = 39;
             }).dimensions(left + half + 8, top + 27, half, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")), b -> {
+                highlightsEnabled = !highlightsEnabled;
+                b.setMessage(Text.literal("Highlights: " + (highlightsEnabled ? "ON" : "OFF")));
+                saveConfig();
+            }).dimensions(left, top + 81, panelWidth, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Scan radius: " + radius + " blocks"), b -> {
                 radius = radius >= MAX_RADIUS ? MIN_RADIUS : radius + 8;
                 b.setMessage(Text.literal("Scan radius: " + radius + " blocks")); saveConfig();
