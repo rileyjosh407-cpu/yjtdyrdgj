@@ -94,7 +94,8 @@ public final class BaseFinderClient implements ClientModInitializer {
                 notifyPlayer(client, "Base Finder radius: " + radius + " blocks");
                 if (enabled) tickCounter = 39;
             }
-            if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 5) {
+            // Re-emit markers frequently so they remain visible while the scanner is enabled.
+            if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 2) {
                 highlightTick = 0;
                 highlightFoundBlocks(client);
                 highlightFoundEntities(client);
@@ -200,24 +201,31 @@ public final class BaseFinderClient implements ClientModInitializer {
     }
 
     private static void highlightFoundBlocks(MinecraftClient client) {
-        if (client.world == null) return;
+        if (client.world == null || client.player == null) return;
         for (FoundBlock item : found) {
             BlockPos p = item.pos();
-            double x = p.getX() + 0.5, y = p.getY() + 0.5, z = p.getZ() + 0.5;
-            // Bright END_ROD markers at corners and midpoints make detections easier to spot.
+            double x = p.getX() + 0.5, y = p.getY(), z = p.getZ() + 0.5;
+            float[] color = colorForBlock(item.name());
+            DustParticleEffect dust = new DustParticleEffect(rgbColor(color), 1.6F);
+
+            // Use bright particles at all eight corners plus the centre of each face.
+            // Dust provides the category colour; end rods add a high-contrast sparkle.
             double[][] markers = {
-                    {-0.42, 0.95, -0.42}, {0.42, 0.95, -0.42},
-                    {-0.42, 0.95, 0.42}, {0.42, 0.95, 0.42},
-                    {-0.42, 0.10, -0.42}, {0.42, 0.10, -0.42},
-                    {-0.42, 0.10, 0.42}, {0.42, 0.10, 0.42},
-                    {-0.42, 0.55, -0.42}, {0.42, 0.55, -0.42},
-                    {-0.42, 0.55, 0.42}, {0.42, 0.55, 0.42}
+                    {0.04, 0.04, 0.04}, {0.96, 0.04, 0.04},
+                    {0.04, 0.04, 0.96}, {0.96, 0.04, 0.96},
+                    {0.04, 0.96, 0.04}, {0.96, 0.96, 0.04},
+                    {0.04, 0.96, 0.96}, {0.96, 0.96, 0.96},
+                    {0.50, 0.50, 0.02}, {0.50, 0.50, 0.98},
+                    {0.02, 0.50, 0.50}, {0.98, 0.50, 0.50}
             };
             for (double[] marker : markers) {
-                float[] color = colorForBlock(item.name());
-                client.world.addParticleClient(new DustParticleEffect(rgbColor(color), 1.0F),
-                        x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
+                client.world.addParticleClient(dust,
+                        p.getX() + marker[0], y + marker[1], p.getZ() + marker[2],
+                        0.0, 0.015, 0.0);
             }
+            // A pair of bright sparkles makes the target easier to notice in motion.
+            client.world.addParticleClient(ParticleTypes.END_ROD, x, y + 0.5, z, 0.0, 0.025, 0.0);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x, y + 1.0, z, 0.0, 0.025, 0.0);
         }
     }
 
@@ -245,10 +253,14 @@ public final class BaseFinderClient implements ClientModInitializer {
             boolean player = entity instanceof PlayerEntity;
             if (player ? !playersEnabled : !entitiesEnabled) continue;
             float[] rgb = player ? new float[]{0.1F, 0.95F, 1.0F} : new float[]{1.0F, 0.2F, 0.28F};
+            DustParticleEffect dust = new DustParticleEffect(rgbColor(rgb), 1.7F);
             double x = entity.getX(), y = entity.getY(), z = entity.getZ();
-            DustParticleEffect dust = new DustParticleEffect(rgbColor(rgb), 1.25F);
-            client.world.addParticleClient(dust, x, y + 0.15, z, 0, 0.015, 0);
-            client.world.addParticleClient(dust, x, y + Math.max(0.8, entity.getHeight()), z, 0, 0.015, 0);
+            double height = Math.max(0.8, entity.getHeight());
+            // Keep both ends of the entity marked, with extra sparks around the midpoint.
+            client.world.addParticleClient(dust, x, y + 0.08, z, 0.0, 0.02, 0.0);
+            client.world.addParticleClient(dust, x, y + height * 0.5, z, 0.0, 0.02, 0.0);
+            client.world.addParticleClient(dust, x, y + height, z, 0.0, 0.02, 0.0);
+            client.world.addParticleClient(ParticleTypes.END_ROD, x, y + height, z, 0.0, 0.025, 0.0);
         }
     }
 
