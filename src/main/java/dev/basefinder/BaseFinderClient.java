@@ -170,8 +170,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         camera.setNoGravity(true);
         camera.noClip = true;
         camera.setInvisible(true);
-        camera.setId(-1337);
-        client.world.addEntity(camera);
+        // Camera remains client-local; do not register it in world ticking.
         freecamCamera = camera;
         freecamEnabled = true;
         client.setCameraEntity(camera);
@@ -188,7 +187,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_A) == GLFW.GLFW_PRESS) strafe -= 1.0;
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS) vertical += 1.0;
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS) vertical -= 1.0;
-        float yaw = client.player.getYaw();
+        float yaw = freecamCamera.getYaw();
         double radians = Math.toRadians(yaw);
         double dx = (strafe * Math.cos(radians) - forward * Math.sin(radians)) * freecamSpeed;
         double dz = (forward * Math.cos(radians) + strafe * Math.sin(radians)) * freecamSpeed;
@@ -196,8 +195,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                 freecamCamera.getZ() + dz);
         // Follow the player's live view angles, but don't mutate player velocity each tick;
         // doing so can fight vanilla movement/network updates and cause jitter.
-        freecamCamera.setYaw(client.player.getYaw());
-        freecamCamera.setPitch(client.player.getPitch());
+        // Keep the detached camera's own rotation; do not snap it back to player rotation.
     }
 
     /**
