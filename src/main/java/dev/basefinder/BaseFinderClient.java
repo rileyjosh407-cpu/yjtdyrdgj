@@ -262,10 +262,10 @@ public final class BaseFinderClient implements ClientModInitializer {
             int top = (height - Math.min(390, height - 24)) / 2 + 49;
             addDrawableChild(ButtonWidget.builder(Text.literal("BLOCKS"), b -> {
                 entityTab = false; filterPage = 0; init();
-            }).dimensions(left + 15, top + 57, 100, 20).build());
+            }).dimensions((width - Math.min(560, width - 24)) / 2 + 15, top + 57, 100, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("ENTITIES / PLAYERS"), b -> {
                 entityTab = true; filterPage = 0; init();
-            }).dimensions(left + 15, top + 82, 100, 30).build());
+            }).dimensions((width - Math.min(560, width - 24)) / 2 + 15, top + 82, 100, 30).build());
             addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
                 chunkFinderEnabled = !chunkFinderEnabled;
                 b.setMessage(moduleLabel()); saveConfig();
@@ -294,10 +294,10 @@ public final class BaseFinderClient implements ClientModInitializer {
             if (entityTab) {
                 addDrawableChild(ButtonWidget.builder(Text.literal("Players: " + (playersEnabled ? "ON" : "OFF")), b -> {
                     playersEnabled = !playersEnabled; b.setMessage(Text.literal("Players: " + (playersEnabled ? "ON" : "OFF"))); saveConfig();
-                }).dimensions(left, top + 105, panelWidth, 22).build());
+                }).dimensions(left, top + 155, panelWidth, 22).build());
                 addDrawableChild(ButtonWidget.builder(Text.literal("Other entities: " + (entitiesEnabled ? "ON" : "OFF")), b -> {
                     entitiesEnabled = !entitiesEnabled; b.setMessage(Text.literal("Other entities: " + (entitiesEnabled ? "ON" : "OFF"))); saveConfig();
-                }).dimensions(left, top + 133, panelWidth, 22).build());
+                }).dimensions(left, top + 183, panelWidth, 22).build());
             }
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             int first = filterPage * FILTERS_PER_PAGE;
