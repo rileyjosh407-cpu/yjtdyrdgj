@@ -290,28 +290,12 @@ public final class BaseFinderClient implements ClientModInitializer {
     // A custom depth-test-free pipeline based on Minecraft's position/color debug pipeline.
     // Unlike particles, these outlines are rebuilt from the current targets every frame and
     // remain visible through terrain.
-    private static final RenderPipeline BASE_HIGHLIGHT_PIPELINE = RenderPipelines.DEBUG_FILLED_BOX;
-    private static final RenderPipeline THROUGH_WALLS_PIPELINE = RenderPipeline.builder(
-            new RenderPipeline.Snippet(
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexShader()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getFragmentShader()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getShaderDefines()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getSamplers()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getUniforms()),
-                    BASE_HIGHLIGHT_PIPELINE.getBlendFunction(),
-                    Optional.of(DepthTestFunction.NO_DEPTH_TEST),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getPolygonMode()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isCull()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isWriteColor()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isWriteAlpha()),
-                    Optional.of(false),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getColorLogic()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexFormat()),
-                    Optional.of(VertexFormat.DrawMode.TRIANGLES)
-            )
-    ).withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
-     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
-     .build();
+    private static final RenderPipeline THROUGH_WALLS_PIPELINE = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+                    .withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    .build()
+    );
 
     private static final BufferAllocator HIGHLIGHT_ALLOCATOR = new BufferAllocator(1 << 20);
     private static MappableRingBuffer highlightVertexBuffer;
