@@ -1,4 +1,4 @@
-# Base Finder — Fabric 1.21.1
+# Base Finder — Fabric 1.21.11
 
 Client-side nearby utility-block scanner for single-player or servers where scanning is permitted.
 
@@ -7,10 +7,11 @@ Client-side nearby utility-block scanner for single-player or servers where scan
 - R: Rescan
 - [: Decrease radius
 - ]: Increase radius
+- F8: Open settings and block filters
 
-The HUD lists up to 10 nearby matching blocks with coordinates and distance. Radius is 4–48 blocks, with a vertical scan range of 8 blocks above/below the player.
+The scanner lists up to 12 nearby matching blocks, including storage/workstation clues, spawners, and ancient debris, with coordinates and distance. Use F8 to configure filters. Radius is 8–64 blocks.
 
 This only checks block data currently available to the client. It does not request or force-load chunks, inspect server files, or bypass server protections. It is not a guaranteed remote-base finder.
 
 ## Build
-The GitHub Actions workflow builds with Java 21 and Gradle 8.8. Open Actions and run "Build Base Finder"; download the base-finder-fabric-1.21.1 artifact from a successful run. Install Fabric Loader and Fabric API for Minecraft 1.21.1, then place the regular mod JAR in the instance's mods folder.
+The GitHub Actions workflow builds with Java 21 and Gradle 8.14.3. Open Actions and run "Build Base Finder"; download the base-finder-fabric-1.21.11 artifact from a successful run. Install Fabric Loader and Fabric API for Minecraft 1.21.1, then place the regular mod JAR in the instance's mods folder.
