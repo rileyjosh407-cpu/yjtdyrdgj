@@ -370,8 +370,8 @@ public final class BaseFinderClient implements ClientModInitializer {
                 MemoryUtil.memCopy(built.getBuffer(), mapped.data());
             }
 
-            RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(THROUGH_WALLS_PIPELINE.getVertexFormatMode());
-            GpuBuffer indices = shapeIndexBuffer.getBuffer(params.indexCount());
+            RenderSystem.ShapeIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(THROUGH_WALLS_PIPELINE.getVertexFormatMode());
+            GpuBuffer indices = shapeIndexBuffer.getIndexBuffer(params.indexCount());
             GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().write(
                     RenderSystem.getModelViewMatrix(), HIGHLIGHT_COLOR_MODULATOR,
                     HIGHLIGHT_MODEL_OFFSET, HIGHLIGHT_TEXTURE_MATRIX);
@@ -384,7 +384,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", transforms);
                 pass.setVertexBuffer(0, highlightVertexBuffer.getBlocking());
-                pass.setIndexBuffer(indices, shapeIndexBuffer.type());
+                pass.setIndexBuffer(indices, shapeIndexBuffer.getIndexType());
                 pass.drawIndexed(0, 0, params.indexCount(), 1);
             }
             highlightVertexBuffer.rotate();
