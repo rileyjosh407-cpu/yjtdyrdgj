@@ -22,7 +22,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.particle.DustParticleEffect;
-import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -216,7 +215,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             };
             for (double[] marker : markers) {
                 float[] color = colorForBlock(item.name());
-                client.world.addParticleClient(new DustParticleEffect(new Vector3f(color[0], color[1], color[2]), 1.0F),
+                client.world.addParticleClient(new DustParticleEffect(rgbColor(color), 1.0F),
                         x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
             }
         }
@@ -232,6 +231,13 @@ public final class BaseFinderClient implements ClientModInitializer {
         return new float[]{1.0F, 0.9F, 0.2F};                                  // yellow: utility blocks
     }
 
+    private static int rgbColor(float[] rgb) {
+        int red = Math.round(rgb[0] * 255.0F) & 0xFF;
+        int green = Math.round(rgb[1] * 255.0F) & 0xFF;
+        int blue = Math.round(rgb[2] * 255.0F) & 0xFF;
+        return (red << 16) | (green << 8) | blue;
+    }
+
     private static void highlightFoundEntities(MinecraftClient client) {
         if (client.world == null || client.player == null) return;
         var box = client.player.getBoundingBox().expand(radius);
@@ -240,7 +246,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             if (player ? !playersEnabled : !entitiesEnabled) continue;
             float[] rgb = player ? new float[]{0.1F, 0.95F, 1.0F} : new float[]{1.0F, 0.2F, 0.28F};
             double x = entity.getX(), y = entity.getY(), z = entity.getZ();
-            DustParticleEffect dust = new DustParticleEffect(new Vector3f(rgb[0], rgb[1], rgb[2]), 1.25F);
+            DustParticleEffect dust = new DustParticleEffect(rgbColor(rgb), 1.25F);
             client.world.addParticleClient(dust, x, y + 0.15, z, 0, 0.015, 0);
             client.world.addParticleClient(dust, x, y + Math.max(0.8, entity.getHeight()), z, 0, 0.015, 0);
         }
