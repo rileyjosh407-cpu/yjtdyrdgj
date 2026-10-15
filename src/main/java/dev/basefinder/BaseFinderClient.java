@@ -7,6 +7,8 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -19,6 +21,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.particle.DustParticleEffect;
+import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -41,6 +45,8 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static int tickCounter = 0;
     private static int highlightTick = 0;
     private static boolean highlightsEnabled = true;
+    private static boolean playersEnabled = true;
+    private static boolean entitiesEnabled = true;
     private static int radius = 24;
     private static int sensitivity = 3;
     private static int simulationDistance = 4;
@@ -92,6 +98,7 @@ public final class BaseFinderClient implements ClientModInitializer {
             if (enabled && highlightsEnabled && client.player != null && client.world != null && ++highlightTick >= 5) {
                 highlightTick = 0;
                 highlightFoundBlocks(client);
+                highlightFoundEntities(client);
             }
             if (enabled && client.player != null && client.world != null && ++tickCounter >= 40) {
                 tickCounter = 0;
@@ -125,6 +132,8 @@ public final class BaseFinderClient implements ClientModInitializer {
         radius = clamp(parseInt(p.getProperty("radius"), 24), MIN_RADIUS, MAX_RADIUS);
         chunkFinderEnabled = Boolean.parseBoolean(p.getProperty("chunkFinderEnabled", "true"));
         highlightsEnabled = Boolean.parseBoolean(p.getProperty("highlightsEnabled", "true"));
+        playersEnabled = Boolean.parseBoolean(p.getProperty("playersEnabled", "true"));
+        entitiesEnabled = Boolean.parseBoolean(p.getProperty("entitiesEnabled", "true"));
         blockFilters.clear();
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
@@ -144,6 +153,8 @@ public final class BaseFinderClient implements ClientModInitializer {
         p.setProperty("radius", Integer.toString(radius));
         p.setProperty("chunkFinderEnabled", Boolean.toString(chunkFinderEnabled));
         p.setProperty("highlightsEnabled", Boolean.toString(highlightsEnabled));
+        p.setProperty("playersEnabled", Boolean.toString(playersEnabled));
+        p.setProperty("entitiesEnabled", Boolean.toString(entitiesEnabled));
         for (Block block : filterBlocks) {
             String key = "block." + Registries.BLOCK.getId(block).toString().replace(':', '.');
             p.setProperty(key, Boolean.toString(blockFilters.getOrDefault(block, true)));
@@ -204,14 +215,40 @@ public final class BaseFinderClient implements ClientModInitializer {
                     {-0.42, 0.55, 0.42}, {0.42, 0.55, 0.42}
             };
             for (double[] marker : markers) {
-                client.world.addParticleClient(ParticleTypes.END_ROD,
+                float[] color = colorForBlock(item.name());
+                client.world.addParticleClient(new DustParticleEffect(new Vector3f(color[0], color[1], color[2]), 1.0F),
                         x + marker[0], p.getY() + marker[1], z + marker[2], 0, 0.005, 0);
             }
         }
     }
 
+    private static float[] colorForBlock(String name) {
+        String n = name.toLowerCase();
+        if (n.contains("spawner")) return new float[]{1.0F, 0.12F, 0.12F};       // red
+        if (n.contains("chest") || n.contains("barrel")) return new float[]{1.0F, 0.62F, 0.08F}; // orange
+        if (n.contains("amethyst")) return new float[]{0.72F, 0.25F, 1.0F};    // purple
+        if (n.contains("debris")) return new float[]{0.12F, 0.95F, 0.45F};    // green
+        if (n.contains("hopper") || n.contains("dropper") || n.contains("dispenser")) return new float[]{0.15F, 0.8F, 1.0F}; // cyan
+        return new float[]{1.0F, 0.9F, 0.2F};                                  // yellow: utility blocks
+    }
+
+    private static void highlightFoundEntities(MinecraftClient client) {
+        if (client.world == null || client.player == null) return;
+        var box = client.player.getBoundingBox().expand(radius);
+        for (Entity entity : client.world.getEntitiesByClass(Entity.class, box, e -> e != client.player)) {
+            boolean player = entity instanceof PlayerEntity;
+            if (player ? !playersEnabled : !entitiesEnabled) continue;
+            float[] rgb = player ? new float[]{0.1F, 0.95F, 1.0F} : new float[]{1.0F, 0.2F, 0.28F};
+            double x = entity.getX(), y = entity.getY(), z = entity.getZ();
+            DustParticleEffect dust = new DustParticleEffect(new Vector3f(rgb[0], rgb[1], rgb[2]), 1.25F);
+            client.world.addParticleClient(dust, x, y + 0.15, z, 0, 0.015, 0);
+            client.world.addParticleClient(dust, x, y + Math.max(0.8, entity.getHeight()), z, 0, 0.015, 0);
+        }
+    }
+
     private static final class FinderConfigScreen extends Screen {
         private int filterPage = 0;
+        private boolean entityTab = false;
         private static final int FILTERS_PER_PAGE = 10;
 
         protected FinderConfigScreen() { super(Text.literal("BaseFinder • Modules")); }
@@ -223,6 +260,12 @@ public final class BaseFinderClient implements ClientModInitializer {
             int panelWidth = Math.min(412, width - 160);
             int left = (width - Math.min(560, width - 24)) / 2 + 134;
             int top = (height - Math.min(390, height - 24)) / 2 + 49;
+            addDrawableChild(ButtonWidget.builder(Text.literal("BLOCKS"), b -> {
+                entityTab = false; filterPage = 0; init();
+            }).dimensions(left + 15, top + 57, 100, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("ENTITIES / PLAYERS"), b -> {
+                entityTab = true; filterPage = 0; init();
+            }).dimensions(left + 15, top + 82, 100, 30).build());
             addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
                 chunkFinderEnabled = !chunkFinderEnabled;
                 b.setMessage(moduleLabel()); saveConfig();
@@ -248,9 +291,17 @@ public final class BaseFinderClient implements ClientModInitializer {
                 if (enabled) tickCounter = 39;
             }).dimensions(left, top + 54, panelWidth, 20).build());
 
+            if (entityTab) {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Players: " + (playersEnabled ? "ON" : "OFF")), b -> {
+                    playersEnabled = !playersEnabled; b.setMessage(Text.literal("Players: " + (playersEnabled ? "ON" : "OFF"))); saveConfig();
+                }).dimensions(left, top + 105, panelWidth, 22).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("Other entities: " + (entitiesEnabled ? "ON" : "OFF")), b -> {
+                    entitiesEnabled = !entitiesEnabled; b.setMessage(Text.literal("Other entities: " + (entitiesEnabled ? "ON" : "OFF"))); saveConfig();
+                }).dimensions(left, top + 133, panelWidth, 22).build());
+            }
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             int first = filterPage * FILTERS_PER_PAGE;
-            for (int i = first; i < Math.min(first + FILTERS_PER_PAGE, filterBlocks.size()); i++) {
+            if (!entityTab) for (int i = first; i < Math.min(first + FILTERS_PER_PAGE, filterBlocks.size()); i++) {
                 final Block block = filterBlocks.get(i);
                 int local = i - first;
                 int bx = left + (local % 2) * (half + 8);
@@ -261,12 +312,14 @@ public final class BaseFinderClient implements ClientModInitializer {
                 }).dimensions(bx, by, half, 20).build());
             }
             int navY = top + 105 + 5 * 22 + 2;
+            if (!entityTab) {
             addDrawableChild(ButtonWidget.builder(Text.literal("< Previous"), b -> {
                 filterPage = (filterPage + pages - 1) % pages; init();
             }).dimensions(left, navY, half, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Next >"), b -> {
                 filterPage = (filterPage + 1) % pages; init();
             }).dimensions(left + half + 8, navY, half, 20).build());
+            }
             addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
                     .dimensions(cx - 55, navY + 26, 110, 20).build());
         }
@@ -296,18 +349,18 @@ public final class BaseFinderClient implements ClientModInitializer {
             context.drawTextWithShadow(textRenderer, Text.literal("BASEFINDER"), left + 18, top + 20, 0xFFE0B7FF);
             context.drawTextWithShadow(textRenderer, Text.literal("CLIENT"), left + 18, top + 34, 0xFF8794B7);
             context.fill(left + 15, top + 57, left + sideW - 7, top + 80, 0xFF292344);
-            context.drawTextWithShadow(textRenderer, Text.literal("●  Modules"), left + 21, top + 64, 0xFFFFFFFF);
+            context.drawTextWithShadow(textRenderer, Text.literal(entityTab ? "●  Entities" : "●  Blocks"), left + 21, top + 64, 0xFFFFFFFF);
             context.drawTextWithShadow(textRenderer, Text.literal("1.21.11 Fabric"), left + 18, top + panelHeight - 30, 0xFF8C98B8);
 
             int contentX = left + sideW + 18;
             context.drawTextWithShadow(textRenderer, Text.literal("Module Dashboard"), contentX, top + 16, 0xFFF0EEFF);
-            context.drawTextWithShadow(textRenderer, Text.literal("Loaded-block scanner  •  client-side"), contentX, top + 30, 0xFF9BA6C4);
+            context.drawTextWithShadow(textRenderer, Text.literal(entityTab ? "Nearby players and entities  •  client-side" : "Loaded-block scanner  •  client-side"), contentX, top + 30, 0xFF9BA6C4);
             context.fill(contentX, top + 43, left + panelWidth - 12, top + 44, 0xFF303954);
 
             // Controls are positioned inside the clean panel; avoid decorative cards behind filter buttons.
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             context.drawTextWithShadow(textRenderer,
-                    Text.literal("BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
+                    Text.literal(entityTab ? "ENTITY & PLAYER HIGHLIGHTS" : "BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
                     contentX, top + 132, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("Right Shift: menu  •  G: scanner  •  R: rescan  •  [ ]: radius"),
