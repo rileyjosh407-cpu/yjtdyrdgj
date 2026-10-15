@@ -188,6 +188,16 @@ public final class BaseFinderClient implements ClientModInitializer {
         if (client.player == null || freecamCamera == null) return;
         double forward = 0.0, strafe = 0.0, vertical = 0.0;
         long window = client.getWindow().getHandle();
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            java.nio.DoubleBuffer mx = stack.mallocDouble(1), my = stack.mallocDouble(1);
+            GLFW.glfwGetCursorPos(window, mx, my);
+            double x = mx.get(0), y = my.get(0);
+            double dx = x - freecamMouseX, dy = y - freecamMouseY;
+            freecamMouseX = x; freecamMouseY = y;
+            float sensitivity = (float)(0.5 * Math.pow(client.options.getMouseSensitivity().getValue(), 3.0) + 0.02);
+            freecamCamera.setYaw(freecamCamera.getYaw() + (float)dx * sensitivity * 8.0f);
+            freecamCamera.setPitch(Math.max(-90.0f, Math.min(90.0f, freecamCamera.getPitch() + (float)dy * sensitivity * 8.0f)));
+        }
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_W) == GLFW.GLFW_PRESS) forward += 1.0;
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_S) == GLFW.GLFW_PRESS) forward -= 1.0;
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_D) == GLFW.GLFW_PRESS) strafe += 1.0;
