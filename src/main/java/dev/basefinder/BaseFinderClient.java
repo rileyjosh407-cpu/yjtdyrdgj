@@ -307,7 +307,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                     Optional.of(false),
                     Optional.of(BASE_HIGHLIGHT_PIPELINE.getColorLogic()),
                     Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexFormat()),
-                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexFormatMode())
+                    Optional.of(VertexFormat.DrawMode.TRIANGLES)
             )
     ).withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
      .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
@@ -322,7 +322,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static void renderPersistentHighlights(net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (!enabled || !highlightsEnabled || client.world == null || client.player == null) return;
-        Vec3d camera = client.gameRenderer.getCamera().getPos();
+        Vec3d camera = client.gameRenderer.getCamera().getCameraPos();
         BufferBuilder builder = new BufferBuilder(HIGHLIGHT_ALLOCATOR,
                 THROUGH_WALLS_PIPELINE.getVertexFormatMode(), THROUGH_WALLS_PIPELINE.getVertexFormat());
         int drawn = 0;
@@ -370,9 +370,9 @@ public final class BaseFinderClient implements ClientModInitializer {
                 MemoryUtil.memCopy(built.getBuffer(), mapped.data());
             }
 
-            built.sortQuads(HIGHLIGHT_ALLOCATOR, RenderSystem.getProjectionType().vertexSorting());
-            GpuBuffer indices = format.uploadImmediateIndexBuffer(built.getSortedBuffer());
-            GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(THROUGH_WALLS_PIPELINE.getVertexFormatMode());
+            GpuBuffer indices = shapeIndexBuffer.getBuffer(params.indexCount());
+            GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().write(
                     RenderSystem.getModelViewMatrix(), HIGHLIGHT_COLOR_MODULATOR,
                     HIGHLIGHT_MODEL_OFFSET, HIGHLIGHT_TEXTURE_MATRIX);
             var framebuffer = client.getFramebuffer();
@@ -384,7 +384,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", transforms);
                 pass.setVertexBuffer(0, highlightVertexBuffer.getBlocking());
-                pass.setIndexBuffer(indices, params.indexType());
+                pass.setIndexBuffer(indices, shapeIndexBuffer.type());
                 pass.drawIndexed(0, 0, params.indexCount(), 1);
             }
             highlightVertexBuffer.rotate();
@@ -423,10 +423,12 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static void ribbon(BufferBuilder b, double x1,double y1,double z1,double x2,double y2,double z2,
                                int axis,double t,Vec3d c,float r,float g,float blue,float a) {
         double ox = axis == 1 ? t : 0, oy = axis == 0 ? t : 0, oz = axis == 2 ? t : 0;
-        vertex(b,x1-ox-c.x,y1-oy-c.y,z1-oz-c.z,r,g,blue,a);
-        vertex(b,x2-ox-c.x,y2-oy-c.y,z2-oz-c.z,r,g,blue,a);
-        vertex(b,x2+ox-c.x,y2+oy-c.y,z2+oz-c.z,r,g,blue,a);
-        vertex(b,x1+ox-c.x,y1+oy-c.y,z1+oz-c.z,r,g,blue,a);
+        float ax=(float)(x1-ox-c.x), ay=(float)(y1-oy-c.y), az=(float)(z1-oz-c.z);
+        float bx=(float)(x2-ox-c.x), by=(float)(y2-oy-c.y), bz=(float)(z2-oz-c.z);
+        float cx=(float)(x2+ox-c.x), cy=(float)(y2+oy-c.y), cz=(float)(z2+oz-c.z);
+        float dx=(float)(x1+ox-c.x), dy=(float)(y1+oy-c.y), dz=(float)(z1+oz-c.z);
+        vertex(b,ax,ay,az,r,g,blue,a); vertex(b,bx,by,bz,r,g,blue,a); vertex(b,cx,cy,cz,r,g,blue,a);
+        vertex(b,ax,ay,az,r,g,blue,a); vertex(b,cx,cy,cz,r,g,blue,a); vertex(b,dx,dy,dz,r,g,blue,a);
     }
 
     private static void vertex(BufferBuilder b,float x,float y,float z,float r,float g,float blue,float a) {
