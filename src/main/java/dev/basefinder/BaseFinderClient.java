@@ -46,6 +46,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static boolean freecamEnabled = false;
     private static Entity freecamCamera;
     private static double freecamSpeed = 0.35;
+    private static double freecamMouseX, freecamMouseY;
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
     private static int tickCounter = 0;
@@ -172,6 +173,12 @@ public final class BaseFinderClient implements ClientModInitializer {
         camera.setInvisible(true);
         // Camera remains client-local; do not register it in world ticking.
         freecamCamera = camera;
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            java.nio.DoubleBuffer mx = stack.mallocDouble(1), my = stack.mallocDouble(1);
+            GLFW.glfwGetCursorPos(client.getWindow().getHandle(), mx, my);
+            freecamMouseX = mx.get(0);
+            freecamMouseY = my.get(0);
+        }
         freecamEnabled = true;
         client.setCameraEntity(camera);
         notifyPlayer(client, "Freecam enabled (V to return).");
