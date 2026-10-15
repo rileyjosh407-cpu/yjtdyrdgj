@@ -59,7 +59,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         rescanKey = registerKey("key.basefinder.rescan", GLFW.GLFW_KEY_R);
         increaseRadiusKey = registerKey("key.basefinder.radius_increase", GLFW.GLFW_KEY_RIGHT_BRACKET);
         decreaseRadiusKey = registerKey("key.basefinder.radius_decrease", GLFW.GLFW_KEY_LEFT_BRACKET);
-        configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_F8);
+        configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_RIGHT_SHIFT);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (configKey.wasPressed()) {
@@ -214,7 +214,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         private int filterPage = 0;
         private static final int FILTERS_PER_PAGE = 10;
 
-        protected FinderConfigScreen() { super(Text.literal("Base Finder Settings")); }
+        protected FinderConfigScreen() { super(Text.literal("BaseFinder • Modules")); }
 
         @Override
         protected void init() {
@@ -282,19 +282,48 @@ public final class BaseFinderClient implements ClientModInitializer {
 
         @Override
         public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-            context.fill(0, 0, width, height, 0xE9080D18);
-            int panelWidth = Math.min(430, width - 24);
-            int left = width / 2 - panelWidth / 2;
-            context.fill(left - 10, 28, left + panelWidth + 10, Math.min(height - 8, 370), 0xF0182235);
-            context.fill(left - 10, 28, left + panelWidth + 10, 32, 0xFF9D75FF);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("BASE FINDER"), width / 2, 10, 0xFFE0B7FF);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("SETTINGS  •  BLOCK FILTERS"), width / 2, 31, 0xFFB9C7E8);
+            // New compact module dashboard. Keep vanilla widgets for reliable input handling.
+            context.fill(0, 0, width, height, 0xD9070A16);
+            int panelWidth = Math.min(560, width - 24);
+            int panelHeight = Math.min(390, height - 24);
+            int left = (width - panelWidth) / 2;
+            int top = (height - panelHeight) / 2;
+            context.fill(left - 1, top - 1, left + panelWidth + 1, top + panelHeight + 1, 0xFF6554B8);
+            context.fill(left, top, left + panelWidth, top + panelHeight, 0xF00B1020);
+            context.fill(left, top, left + panelWidth, top + 3, 0xFF9D75FF);
+            int sideW = 116;
+            context.fill(left + 8, top + 10, left + sideW, top + panelHeight - 10, 0xFF10172A);
+            context.drawTextWithShadow(textRenderer, Text.literal("BASEFINDER"), left + 18, top + 20, 0xFFE0B7FF);
+            context.drawTextWithShadow(textRenderer, Text.literal("CLIENT"), left + 18, top + 34, 0xFF8794B7);
+            context.fill(left + 15, top + 57, left + sideW - 7, top + 80, 0xFF292344);
+            context.drawTextWithShadow(textRenderer, Text.literal("●  Modules"), left + 21, top + 64, 0xFFFFFFFF);
+            context.drawTextWithShadow(textRenderer, Text.literal("1.21.11 Fabric"), left + 18, top + panelHeight - 30, 0xFF8C98B8);
+
+            int contentX = left + sideW + 18;
+            context.drawTextWithShadow(textRenderer, Text.literal("Module Dashboard"), contentX, top + 16, 0xFFF0EEFF);
+            context.drawTextWithShadow(textRenderer, Text.literal("Loaded-block scanner  •  client-side"), contentX, top + 30, 0xFF9BA6C4);
+            context.fill(contentX, top + 43, left + panelWidth - 12, top + 44, 0xFF303954);
+
+            // Draw separate module-card backplates behind the interactive controls.
+            int half = (Math.min(430, width - 24) - 8) / 2;
+            int cardW = Math.min(half, panelWidth - sideW - 30);
+            int cardX = contentX;
+            int cardTop = top + 49;
+            for (int i = 0; i < 5; i++) {
+                int row = i < 3 ? i : i - 3;
+                int col = i < 3 ? 0 : 1;
+                int x = cardX + col * (cardW + 8);
+                int y = cardTop + row * 50;
+                if (x + cardW < left + panelWidth - 6 && y + 42 < top + panelHeight - 38)
+                    context.fill(x, y, x + cardW, y + 42, 0xFF151D31);
+            }
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             context.drawTextWithShadow(textRenderer,
-                    Text.literal("Toggle the blocks that count as clues  •  Page " + (filterPage + 1) + "/" + pages),
-                    left, 137, 0xFFD5DDF0);
+                    Text.literal("BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
+                    contentX, top + 137, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("F8 menu  •  G scanner  •  R rescan  •  [ ] radius"), width / 2, height - 14, 0xFF9CAAC4);
+                    Text.literal("Right Shift: menu  •  G: scanner  •  R: rescan  •  [ ]: radius"),
+                    width / 2, height - 12, 0xFFB4A7F5);
             super.render(context, mouseX, mouseY, delta);
         }
 
