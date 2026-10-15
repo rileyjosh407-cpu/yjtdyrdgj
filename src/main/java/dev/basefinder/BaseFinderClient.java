@@ -291,7 +291,23 @@ public final class BaseFinderClient implements ClientModInitializer {
     // Unlike particles, these outlines are rebuilt from the current targets every frame and
     // remain visible through terrain.
     private static final RenderPipeline THROUGH_WALLS_PIPELINE = RenderPipelines.register(
-            RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+            RenderPipeline.builder(new RenderPipeline.Snippet(
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getVertexShader()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getFragmentShader()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getShaderDefines()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getSamplers()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getUniforms()),
+                    RenderPipelines.DEBUG_FILLED_BOX.getBlendFunction(),
+                    Optional.of(DepthTestFunction.NO_DEPTH_TEST),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getPolygonMode()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.isCull()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.isWriteColor()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.isWriteAlpha()),
+                    Optional.of(false),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getColorLogic()),
+                    Optional.of(RenderPipelines.DEBUG_FILLED_BOX.getVertexFormat()),
+                    Optional.of(VertexFormat.DrawMode.TRIANGLES)
+            ))
                     .withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
                     .withVertexFormat(RenderPipelines.DEBUG_FILLED_BOX.getVertexFormat(), VertexFormat.DrawMode.TRIANGLES)
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
