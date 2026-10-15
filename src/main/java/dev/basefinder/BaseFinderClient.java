@@ -59,9 +59,11 @@ import java.util.Properties;
 
 /** Client-side Base Finder for Minecraft 1.21.11 + Fabric. */
 public final class BaseFinderClient implements ClientModInitializer {
-    private static KeyBinding toggleKey, rescanKey, increaseRadiusKey, decreaseRadiusKey, configKey;
+    private static KeyBinding toggleKey, rescanKey, increaseRadiusKey, decreaseRadiusKey, configKey, activityKey;
     private static boolean enabled = false;
     private static boolean chunkFinderEnabled = true;
+    // Optional activity-clue module. It only examines chunks already present on the client.
+    private static boolean activityScannerEnabled = false;
     private static int tickCounter = 0;
     private static int highlightTick = 0;
     private static boolean highlightsEnabled = true;
@@ -73,7 +75,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static final int MIN_RADIUS = 8, MAX_RADIUS = 64, MAX_RESULTS = 12;
     private static final List<FoundBlock> found = new ArrayList<>();
     private static final Map<Block, Boolean> blockFilters = new LinkedHashMap<>();
-    private static final List<Block> filterBlocks = List.of(Blocks.SPAWNER, Blocks.ANCIENT_DEBRIS, Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD);
+    private static final List<Block> filterBlocks = List.of(Blocks.SPAWNER, Blocks.ANCIENT_DEBRIS, Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL, Blocks.ENDER_CHEST, Blocks.SHULKER_BOX, Blocks.HOPPER, Blocks.DROPPER, Blocks.DISPENSER, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER, Blocks.CRAFTING_TABLE, Blocks.ENCHANTING_TABLE, Blocks.ANVIL, Blocks.CHIPPED_ANVIL, Blocks.DAMAGED_ANVIL, Blocks.BREWING_STAND, Blocks.SMITHING_TABLE, Blocks.GRINDSTONE, Blocks.STONECUTTER, Blocks.LECTERN, Blocks.LOOM, Blocks.CARTOGRAPHY_TABLE, Blocks.JUKEBOX, Blocks.BEEHIVE, Blocks.BEE_NEST, Blocks.BUDDING_AMETHYST, Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD, Blocks.REDSTONE_WIRE, Blocks.REPEATER, Blocks.COMPARATOR, Blocks.OBSERVER, Blocks.PISTON, Blocks.STICKY_PISTON, Blocks.REDSTONE_TORCH, Blocks.REDSTONE_BLOCK, Blocks.LEVER, Blocks.TRIPWIRE_HOOK, Blocks.DAYLIGHT_DETECTOR, Blocks.TARGET, Blocks.NOTE_BLOCK, Blocks.TNT, Blocks.STONE_PRESSURE_PLATE, Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE, Blocks.HEAVY_WEIGHTED_PRESSURE_PLATE);
     private static String scanStatus = "Press G to enable";
     private static final KeyBinding.Category CATEGORY =
             KeyBinding.Category.create(Identifier.of("basefinder", "controls"));
@@ -86,6 +88,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         increaseRadiusKey = registerKey("key.basefinder.radius_increase", GLFW.GLFW_KEY_RIGHT_BRACKET);
         decreaseRadiusKey = registerKey("key.basefinder.radius_decrease", GLFW.GLFW_KEY_LEFT_BRACKET);
         configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_RIGHT_SHIFT);
+        activityKey = registerKey("key.basefinder.activity_scanner", GLFW.GLFW_KEY_H);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (configKey.wasPressed()) {
@@ -96,6 +99,12 @@ public final class BaseFinderClient implements ClientModInitializer {
                 if (!enabled) { found.clear(); scanStatus = "Disabled"; }
                 else { scanStatus = "Scanning nearby loaded blocks..."; tickCounter = 39; }
                 notifyPlayer(client, "Base Finder: " + (enabled ? "ON" : "OFF"));
+            }
+            while (activityKey.wasPressed()) {
+                activityScannerEnabled = !activityScannerEnabled;
+                saveConfig();
+                if (enabled) tickCounter = 39;
+                notifyPlayer(client, "Activity Scanner: " + (activityScannerEnabled ? "ON — loaded chunks only" : "OFF"));
             }
             while (rescanKey.wasPressed()) {
                 if (enabled && client.player != null && client.world != null) {
@@ -153,6 +162,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         simulationDistance = clamp(parseInt(p.getProperty("simulationDistance"), 4), 2, 16);
         radius = clamp(parseInt(p.getProperty("radius"), 24), MIN_RADIUS, MAX_RADIUS);
         chunkFinderEnabled = Boolean.parseBoolean(p.getProperty("chunkFinderEnabled", "true"));
+        activityScannerEnabled = Boolean.parseBoolean(p.getProperty("activityScannerEnabled", "false"));
         highlightsEnabled = Boolean.parseBoolean(p.getProperty("highlightsEnabled", "true"));
         playersEnabled = Boolean.parseBoolean(p.getProperty("playersEnabled", "true"));
         entitiesEnabled = Boolean.parseBoolean(p.getProperty("entitiesEnabled", "true"));
@@ -174,6 +184,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         p.setProperty("simulationDistance", Integer.toString(simulationDistance));
         p.setProperty("radius", Integer.toString(radius));
         p.setProperty("chunkFinderEnabled", Boolean.toString(chunkFinderEnabled));
+        p.setProperty("activityScannerEnabled", Boolean.toString(activityScannerEnabled));
         p.setProperty("highlightsEnabled", Boolean.toString(highlightsEnabled));
         p.setProperty("playersEnabled", Boolean.toString(playersEnabled));
         p.setProperty("entitiesEnabled", Boolean.toString(entitiesEnabled));
@@ -191,7 +202,8 @@ public final class BaseFinderClient implements ClientModInitializer {
         BlockPos center = client.player.getBlockPos();
         Vec3d playerPos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
         List<FoundBlock> results = new ArrayList<>();
-        int scanRadius = Math.min(radius, simulationDistance * 16);
+        // Activity Scanner expands to the configured radius, but never reads unloaded chunks.
+        int scanRadius = activityScannerEnabled ? radius : Math.min(radius, simulationDistance * 16);
         int verticalRadius = Math.min(12 + sensitivity * 2, 20);
         for (int x = -scanRadius; x <= scanRadius; x++) {
             for (int y = -verticalRadius; y <= verticalRadius; y++) {
@@ -216,10 +228,20 @@ public final class BaseFinderClient implements ClientModInitializer {
         // Only explicitly supported filter blocks are clues. Unknown blocks (including air,
         // grass, dirt, stone, and other terrain) must never be added to the results.
         if (!blockFilters.containsKey(block) || !blockFilters.get(block)) return false;
+        if (isActivityClue(block) && !activityScannerEnabled) return false;
         boolean geode = block == Blocks.BUDDING_AMETHYST || block == Blocks.AMETHYST_BLOCK
                 || block == Blocks.AMETHYST_CLUSTER || block == Blocks.LARGE_AMETHYST_BUD
                 || block == Blocks.MEDIUM_AMETHYST_BUD || block == Blocks.SMALL_AMETHYST_BUD;
         return !geode || chunkFinderEnabled;
+    }
+
+    private static boolean isActivityClue(Block block) {
+        return block == Blocks.REDSTONE_WIRE || block == Blocks.REPEATER || block == Blocks.COMPARATOR
+                || block == Blocks.OBSERVER || block == Blocks.PISTON || block == Blocks.STICKY_PISTON
+                || block == Blocks.REDSTONE_TORCH || block == Blocks.REDSTONE_BLOCK || block == Blocks.LEVER
+                || block == Blocks.TRIPWIRE_HOOK || block == Blocks.DAYLIGHT_DETECTOR || block == Blocks.TARGET
+                || block == Blocks.NOTE_BLOCK || block == Blocks.TNT || block == Blocks.STONE_PRESSURE_PLATE
+                || block == Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE || block == Blocks.HEAVY_WEIGHTED_PRESSURE_PLATE;
     }
 
     private static void highlightFoundBlocks(MinecraftClient client) {
@@ -254,6 +276,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static float[] colorForBlock(String name) {
         String n = name.toLowerCase();
         if (n.contains("spawner")) return new float[]{1.0F, 0.12F, 0.12F};       // red
+        if (n.contains("redstone") || n.contains("repeater") || n.contains("comparator") || n.contains("observer") || n.contains("piston") || n.contains("lever") || n.contains("tripwire") || n.contains("pressure_plate") || n.contains("daylight_detector") || n.contains("target") || n.contains("note_block") || n.equals("tnt")) return new float[]{1.0F, 0.18F, 0.72F}; // magenta: activity clues
         if (n.contains("chest") || n.contains("barrel")) return new float[]{1.0F, 0.62F, 0.08F}; // orange
         if (n.contains("amethyst")) return new float[]{0.72F, 0.25F, 1.0F};    // purple
         if (n.contains("debris")) return new float[]{0.12F, 0.95F, 0.45F};    // green
@@ -544,7 +567,7 @@ public final class BaseFinderClient implements ClientModInitializer {
 
             int contentX = left + sideW + 18;
             context.drawTextWithShadow(textRenderer, Text.literal("Module Dashboard"), contentX, top + 16, 0xFFF0EEFF);
-            context.drawTextWithShadow(textRenderer, Text.literal(entityTab ? "Nearby players and entities  •  client-side" : "Loaded-block scanner  •  client-side"), contentX, top + 30, 0xFF9BA6C4);
+            context.drawTextWithShadow(textRenderer, Text.literal(entityTab ? "Nearby players and entities  •  client-side" : (activityScannerEnabled ? "Activity clues ON  •  loaded chunks only" : "Loaded-block scanner  •  client-side")), contentX, top + 30, 0xFF9BA6C4);
             context.fill(contentX, top + 43, left + panelWidth - 12, top + 44, 0xFF303954);
 
             // Controls are positioned inside the clean panel; avoid decorative cards behind filter buttons.
@@ -553,7 +576,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                     Text.literal(entityTab ? "ENTITY & PLAYER HIGHLIGHTS" : "BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
                     contentX, top + 132, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("Right Shift: menu  •  G: scanner  •  R: rescan  •  [ ]: radius"),
+                    Text.literal("Right Shift: menu  •  G: scanner  •  H: activity clues  •  R: rescan  •  [ ]: radius"),
                     width / 2, height - 12, 0xFFB4A7F5);
             super.render(context, mouseX, mouseY, delta);
         }
