@@ -2,6 +2,24 @@ package dev.basefinder;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gl.MappableRingBuffer;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.util.BufferAllocator;
+import org.lwjgl.system.MemoryUtil;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalDouble;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 
 import net.fabricmc.loader.api.FabricLoader;
@@ -23,6 +41,9 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.particle.DustParticleEffect;
 import org.lwjgl.glfw.GLFW;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+import org.joml.Matrix4f;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -105,7 +126,8 @@ public final class BaseFinderClient implements ClientModInitializer {
                 scan(client);
             }
         });
-        // The HUD is removed; particle markers are rendered at detected blocks.
+        // Persistent GPU-rendered outlines replace short-lived particles.
+        WorldRenderEvents.BEFORE_TRANSLUCENT.register(BaseFinderClient::renderPersistentHighlights);
     }
 
     private static KeyBinding registerKey(String translationKey, int keyCode) {
@@ -262,6 +284,153 @@ public final class BaseFinderClient implements ClientModInitializer {
             client.world.addParticleClient(dust, x, y + height, z, 0.0, 0.02, 0.0);
             client.world.addParticleClient(ParticleTypes.END_ROD, x, y + height, z, 0.0, 0.025, 0.0);
         }
+    }
+
+
+    // A custom depth-test-free pipeline based on Minecraft's position/color debug pipeline.
+    // Unlike particles, these outlines are rebuilt from the current targets every frame and
+    // remain visible through terrain.
+    private static final RenderPipeline BASE_HIGHLIGHT_PIPELINE = RenderPipelines.DEBUG_FILLED_BOX;
+    private static final RenderPipeline THROUGH_WALLS_PIPELINE = RenderPipeline.builder(
+            new RenderPipeline.Snippet(
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexShader()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getFragmentShader()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getShaderDefines()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getSamplers()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getUniforms()),
+                    BASE_HIGHLIGHT_PIPELINE.getBlendFunction(),
+                    Optional.of(DepthTestFunction.NO_DEPTH_TEST),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getPolygonMode()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isCull()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isWriteColor()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.isWriteAlpha()),
+                    Optional.of(false),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getColorLogic()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexFormat()),
+                    Optional.of(BASE_HIGHLIGHT_PIPELINE.getVertexFormatMode())
+            )
+    ).withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
+     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+     .build();
+
+    private static final BufferAllocator HIGHLIGHT_ALLOCATOR = new BufferAllocator(1 << 20);
+    private static MappableRingBuffer highlightVertexBuffer;
+    private static final Vector4f HIGHLIGHT_COLOR_MODULATOR = new Vector4f(1f, 1f, 1f, 1f);
+    private static final Vector3f HIGHLIGHT_MODEL_OFFSET = new Vector3f();
+    private static final Matrix4f HIGHLIGHT_TEXTURE_MATRIX = new Matrix4f();
+
+    private static void renderPersistentHighlights(net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (!enabled || !highlightsEnabled || client.world == null || client.player == null) return;
+        Vec3d camera = client.gameRenderer.getCamera().getPos();
+        BufferBuilder builder = new BufferBuilder(HIGHLIGHT_ALLOCATOR,
+                THROUGH_WALLS_PIPELINE.getVertexFormatMode(), THROUGH_WALLS_PIPELINE.getVertexFormat());
+        int drawn = 0;
+
+        for (FoundBlock item : found) {
+            BlockPos p = item.pos();
+            float[] rgb = colorForBlock(item.name());
+            addOutline(builder, p.getX() + 0.035, p.getY() + 0.035, p.getZ() + 0.035,
+                    p.getX() + 0.965, p.getY() + 0.965, p.getZ() + 0.965,
+                    camera, rgb[0], rgb[1], rgb[2], 1.0f);
+            drawn++;
+        }
+
+        var searchBox = client.player.getBoundingBox().expand(radius);
+        int entityCount = 0;
+        for (Entity entity : client.world.getEntitiesByClass(Entity.class, searchBox, e -> e != client.player)) {
+            boolean isPlayer = entity instanceof PlayerEntity;
+            if (isPlayer ? !playersEnabled : !entitiesEnabled) continue;
+            var b = entity.getBoundingBox().expand(0.025);
+            float r = isPlayer ? 0.10f : 1.0f;
+            float g = isPlayer ? 0.95f : 0.18f;
+            float bl = isPlayer ? 1.0f : 0.28f;
+            addOutline(builder, b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ,
+                    camera, r, g, bl, 1.0f);
+            if (++entityCount >= 64) break;
+            drawn++;
+        }
+        if (drawn == 0) return;
+
+        BuiltBuffer built = builder.end();
+        try {
+            BuiltBuffer.DrawParameters params = built.getDrawParameters();
+            VertexFormat format = params.format();
+            int byteCount = params.vertexCount() * format.getVertexSize();
+            if (highlightVertexBuffer == null || highlightVertexBuffer.size() < byteCount) {
+                if (highlightVertexBuffer != null) highlightVertexBuffer.close();
+                highlightVertexBuffer = new MappableRingBuffer(
+                        () -> "Base Finder through-wall highlights",
+                        GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, byteCount);
+            }
+
+            CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+            try (GpuBuffer.MappedView mapped = encoder.mapBuffer(
+                    highlightVertexBuffer.getBlocking().slice(0, built.getBuffer().remaining()), false, true)) {
+                MemoryUtil.memCopy(built.getBuffer(), mapped.data());
+            }
+
+            built.sortQuads(HIGHLIGHT_ALLOCATOR, RenderSystem.getProjectionType().vertexSorting());
+            GpuBuffer indices = format.uploadImmediateIndexBuffer(built.getSortedBuffer());
+            GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransform(
+                    RenderSystem.getModelViewMatrix(), HIGHLIGHT_COLOR_MODULATOR,
+                    HIGHLIGHT_MODEL_OFFSET, HIGHLIGHT_TEXTURE_MATRIX);
+            var framebuffer = client.getFramebuffer();
+            try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> "Base Finder through-wall highlights",
+                    framebuffer.getColorAttachmentView(), OptionalInt.empty(),
+                    framebuffer.getDepthAttachmentView(), OptionalDouble.empty())) {
+                pass.setPipeline(THROUGH_WALLS_PIPELINE);
+                RenderSystem.bindDefaultUniforms(pass);
+                pass.setUniform("DynamicTransforms", transforms);
+                pass.setVertexBuffer(0, highlightVertexBuffer.getBlocking());
+                pass.setIndexBuffer(indices, params.indexType());
+                pass.drawIndexed(0, 0, params.indexCount(), 1);
+            }
+            highlightVertexBuffer.rotate();
+        } catch (RuntimeException ex) {
+            // A renderer/resource reload can invalidate GPU buffers; don't crash the client.
+            if (highlightVertexBuffer != null) {
+                try { highlightVertexBuffer.close(); } catch (Exception ignored) { }
+                highlightVertexBuffer = null;
+            }
+        } finally {
+            built.close();
+        }
+    }
+
+    private static void addOutline(BufferBuilder b, double minX, double minY, double minZ,
+                                   double maxX, double maxY, double maxZ, Vec3d camera,
+                                   float r, float g, float blue, float alpha) {
+        double t = 0.018;
+        // Four X edges
+        ribbon(b,minX,minY,minZ,maxX,minY,minZ,0,t,camera,r,g,blue,alpha);
+        ribbon(b,minX,maxY,minZ,maxX,maxY,minZ,0,t,camera,r,g,blue,alpha);
+        ribbon(b,minX,minY,maxZ,maxX,minY,maxZ,0,t,camera,r,g,blue,alpha);
+        ribbon(b,minX,maxY,maxZ,maxX,maxY,maxZ,0,t,camera,r,g,blue,alpha);
+        // Four Y edges
+        ribbon(b,minX,minY,minZ,minX,maxY,minZ,1,t,camera,r,g,blue,alpha);
+        ribbon(b,maxX,minY,minZ,maxX,maxY,minZ,1,t,camera,r,g,blue,alpha);
+        ribbon(b,minX,minY,maxZ,minX,maxY,maxZ,1,t,camera,r,g,blue,alpha);
+        ribbon(b,maxX,minY,maxZ,maxX,maxY,maxZ,1,t,camera,r,g,blue,alpha);
+        // Four Z edges
+        ribbon(b,minX,minY,minZ,minX,minY,maxZ,2,t,camera,r,g,blue,alpha);
+        ribbon(b,maxX,minY,minZ,maxX,minY,maxZ,2,t,camera,r,g,blue,alpha);
+        ribbon(b,minX,maxY,minZ,minX,maxY,maxZ,2,t,camera,r,g,blue,alpha);
+        ribbon(b,maxX,maxY,minZ,maxX,maxY,maxZ,2,t,camera,r,g,blue,alpha);
+    }
+
+    private static void ribbon(BufferBuilder b, double x1,double y1,double z1,double x2,double y2,double z2,
+                               int axis,double t,Vec3d c,float r,float g,float blue,float a) {
+        double ox = axis == 1 ? t : 0, oy = axis == 0 ? t : 0, oz = axis == 2 ? t : 0;
+        vertex(b,x1-ox-c.x,y1-oy-c.y,z1-oz-c.z,r,g,blue,a);
+        vertex(b,x2-ox-c.x,y2-oy-c.y,z2-oz-c.z,r,g,blue,a);
+        vertex(b,x2+ox-c.x,y2+oy-c.y,z2+oz-c.z,r,g,blue,a);
+        vertex(b,x1+ox-c.x,y1+oy-c.y,z1+oz-c.z,r,g,blue,a);
+    }
+
+    private static void vertex(BufferBuilder b,float x,float y,float z,float r,float g,float blue,float a) {
+        b.vertex(x,y,z).color(Math.round(r*255),Math.round(g*255),Math.round(blue*255),Math.round(a*255));
     }
 
     private static final class FinderConfigScreen extends Screen {
