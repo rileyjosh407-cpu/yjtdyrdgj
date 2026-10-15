@@ -220,9 +220,9 @@ public final class BaseFinderClient implements ClientModInitializer {
         protected void init() {
             clearChildren();
             int cx = width / 2;
-            int panelWidth = Math.min(430, width - 24);
-            int left = cx - panelWidth / 2;
-            int top = 42;
+            int panelWidth = Math.min(412, width - 160);
+            int left = (width - Math.min(560, width - 24)) / 2 + 134;
+            int top = (height - Math.min(390, height - 24)) / 2 + 49;
             addDrawableChild(ButtonWidget.builder(moduleLabel(), b -> {
                 chunkFinderEnabled = !chunkFinderEnabled;
                 b.setMessage(moduleLabel()); saveConfig();
@@ -304,23 +304,11 @@ public final class BaseFinderClient implements ClientModInitializer {
             context.drawTextWithShadow(textRenderer, Text.literal("Loaded-block scanner  •  client-side"), contentX, top + 30, 0xFF9BA6C4);
             context.fill(contentX, top + 43, left + panelWidth - 12, top + 44, 0xFF303954);
 
-            // Draw separate module-card backplates behind the interactive controls.
-            int half = (Math.min(430, width - 24) - 8) / 2;
-            int cardW = Math.min(half, panelWidth - sideW - 30);
-            int cardX = contentX;
-            int cardTop = top + 49;
-            for (int i = 0; i < 5; i++) {
-                int row = i < 3 ? i : i - 3;
-                int col = i < 3 ? 0 : 1;
-                int x = cardX + col * (cardW + 8);
-                int y = cardTop + row * 50;
-                if (x + cardW < left + panelWidth - 6 && y + 42 < top + panelHeight - 38)
-                    context.fill(x, y, x + cardW, y + 42, 0xFF151D31);
-            }
+            // Controls are positioned inside the clean panel; avoid decorative cards behind filter buttons.
             int pages = (filterBlocks.size() + FILTERS_PER_PAGE - 1) / FILTERS_PER_PAGE;
             context.drawTextWithShadow(textRenderer,
                     Text.literal("BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
-                    contentX, top + 137, 0xFFD5DDF0);
+                    contentX, top + 132, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("Right Shift: menu  •  G: scanner  •  R: rescan  •  [ ]: radius"),
                     width / 2, height - 12, 0xFFB4A7F5);
