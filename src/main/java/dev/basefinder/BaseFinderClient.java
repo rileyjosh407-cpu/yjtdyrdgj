@@ -87,7 +87,7 @@ public final class BaseFinderClient implements ClientModInitializer {
         rescanKey = registerKey("key.basefinder.rescan", GLFW.GLFW_KEY_R);
         increaseRadiusKey = registerKey("key.basefinder.radius_increase", GLFW.GLFW_KEY_RIGHT_BRACKET);
         decreaseRadiusKey = registerKey("key.basefinder.radius_decrease", GLFW.GLFW_KEY_LEFT_BRACKET);
-        configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_RIGHT_SHIFT);
+        configKey = registerKey("key.basefinder.config", GLFW.GLFW_KEY_F8);
         activityKey = registerKey("key.basefinder.activity_scanner", GLFW.GLFW_KEY_H);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -576,7 +576,7 @@ public final class BaseFinderClient implements ClientModInitializer {
                     Text.literal(entityTab ? "ENTITY & PLAYER HIGHLIGHTS" : "BLOCK FILTERS  •  Page " + (filterPage + 1) + "/" + pages),
                     contentX, top + 132, 0xFFD5DDF0);
             context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("Right Shift: menu  •  G: scanner  •  H: activity clues  •  R: rescan  •  [ ]: radius"),
+                    Text.literal("F8: menu  •  G: scanner  •  H: activity clues  •  R: rescan  •  [ ]: radius"),
                     width / 2, height - 12, 0xFFB4A7F5);
             super.render(context, mouseX, mouseY, delta);
         }
