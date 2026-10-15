@@ -293,6 +293,7 @@ public final class BaseFinderClient implements ClientModInitializer {
     private static final RenderPipeline THROUGH_WALLS_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
                     .withLocation(Identifier.of("basefinder", "pipeline/through_wall_highlights"))
+                    .withVertexFormat(RenderPipelines.DEBUG_FILLED_BOX.getVertexFormat(), VertexFormat.DrawMode.TRIANGLES)
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .build()
     );
@@ -406,7 +407,7 @@ public final class BaseFinderClient implements ClientModInitializer {
 
     private static void ribbon(BufferBuilder b, double x1,double y1,double z1,double x2,double y2,double z2,
                                int axis,double t,Vec3d c,float r,float g,float blue,float a) {
-        double ox = axis == 1 ? t : 0, oy = axis == 0 ? t : 0, oz = axis == 2 ? t : 0;
+        double ox = (axis == 1 || axis == 2) ? t : 0, oy = axis == 0 ? t : 0, oz = 0;
         float ax=(float)(x1-ox-c.x), ay=(float)(y1-oy-c.y), az=(float)(z1-oz-c.z);
         float bx=(float)(x2-ox-c.x), by=(float)(y2-oy-c.y), bz=(float)(z2-oz-c.z);
         float cx=(float)(x2+ox-c.x), cy=(float)(y2+oy-c.y), cz=(float)(z2+oz-c.z);
